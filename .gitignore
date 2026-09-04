@@ -1,0 +1,30 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tmp/
+.streamlit/secrets.toml
+
+# Downloaded source documents are reproducible from configs/sources.json.
+data/raw/*.pdf
+data/raw/*.metadata.json
+data/raw/*.part
+!data/raw/.gitkeep
+
+# Extracted text is derived from the approved source documents.
+data/processed/*.jsonl
+data/processed/*.report.json
+data/processed/*.audit.json
+!data/processed/.gitkeep
+
+# Reproducible local retrieval indexes may contain API-derived embeddings.
+data/index/*
+!data/index/.gitkeep
+!data/index/guidelines.sqlite3
+
+# Rejected source artifacts are retained locally for provenance review only.
+data/quarantine/*
+!data/quarantine/.gitkeep

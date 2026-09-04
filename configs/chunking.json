@@ -1,0 +1,11 @@
+{
+  "chunker_version": 1,
+  "minimum_estimated_tokens": 200,
+  "target_estimated_tokens": 300,
+  "maximum_estimated_tokens": 400,
+  "overlap_estimated_tokens": 50,
+  "skip_extraction_statuses": [
+    "empty",
+    "image_review_required"
+  ]
+}

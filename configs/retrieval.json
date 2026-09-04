@@ -1,0 +1,19 @@
+{
+  "retrieval_version": 1,
+  "database_path": "data/index/guidelines.sqlite3",
+  "embedding": {
+    "provider": "gemini",
+    "model": "gemini-embedding-001",
+    "dimensions": 768,
+    "batch_size": 16,
+    "timeout_seconds": 30,
+    "maximum_attempts": 3,
+    "minimum_batch_interval_seconds": 15.0
+  },
+  "search": {
+    "bm25_candidates": 20,
+    "dense_candidates": 20,
+    "final_results": 10,
+    "rrf_constant": 60
+  }
+}

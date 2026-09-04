@@ -1,0 +1,44 @@
+{
+  "dataset_version": 1,
+  "description": "Small manually curated retrieval smoke set; expand before deployment.",
+  "default_k": 5,
+  "minimum_recall_at_k": 0.8,
+  "cases": [
+    {
+      "case_id": "dengue_warning_signs",
+      "query": "What are the warning signs of dengue?",
+      "expected_source_id": "mohfw_dengue_2023",
+      "relevant_pages": [37, 39, 40]
+    },
+    {
+      "case_id": "dengue_triage",
+      "query": "How are suspected dengue patients triaged?",
+      "expected_source_id": "mohfw_dengue_2023",
+      "relevant_pages": [55, 56]
+    },
+    {
+      "case_id": "hypertension_repeat_measurement",
+      "query": "How should clinic blood pressure be recorded after repeated measurements?",
+      "expected_source_id": "mohfw_hypertension_2016",
+      "relevant_pages": [35, 36]
+    },
+    {
+      "case_id": "hypertension_screening_worker",
+      "query": "Who can perform blood pressure screening at a health facility?",
+      "expected_source_id": "mohfw_hypertension_2016",
+      "relevant_pages": [6, 8, 49, 50]
+    },
+    {
+      "case_id": "diabetic_foot_prevention",
+      "query": "How can diabetic foot ulcers be prevented?",
+      "expected_source_id": "mohfw_diabetic_foot",
+      "relevant_pages": [6, 7, 8]
+    },
+    {
+      "case_id": "diabetic_foot_infection_signs",
+      "query": "What findings indicate that a diabetic foot wound may be infected?",
+      "expected_source_id": "mohfw_diabetic_foot",
+      "relevant_pages": [8, 9]
+    }
+  ]
+}

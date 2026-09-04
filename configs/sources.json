@@ -1,0 +1,42 @@
+{
+  "manifest_version": 1,
+  "source_page": "https://clinicalestablishments.mohfw.gov.in/en/standard-treatment-guidelines",
+  "documents": [
+    {
+      "source_id": "mohfw_hypertension_2016",
+      "title": "Screening, Diagnosis, Assessment, and Management of Primary Hypertension in Adults in India",
+      "category": "Hypertension",
+      "publisher": "Ministry of Health & Family Welfare, Government of India",
+      "document_date": "2016-03",
+      "language": "en",
+      "exclude_pages_from_index": [1, 2, 44, 137, 138, 139, 140, 141, 142],
+      "pdf_url": "https://clinicalestablishments.mohfw.gov.in/sites/default/files/standard-treatment-guidelines/5191.pdf",
+      "filename": "mohfw_hypertension_2016.pdf"
+    },
+    {
+      "source_id": "mohfw_diabetic_foot",
+      "title": "The Diabetic Foot: Prevention and Management in India (Draft)",
+      "category": "Diabetic Foot",
+      "publisher": "Ministry of Health & Family Welfare, Government of India",
+      "document_date": "2016-01",
+      "language": "en",
+      "exclude_pages_from_index": [],
+      "include_page_ranges": [[3, 17]],
+      "pdf_url": "https://clinicalestablishments.mohfw.gov.in/sites/default/files/standard-treatment-guidelines/5381.pdf",
+      "filename": "mohfw_diabetic_foot.pdf"
+    },
+    {
+      "source_id": "mohfw_dengue_2023",
+      "title": "National Guidelines for Clinical Management of Dengue Fever 2023",
+      "category": "Dengue",
+      "publisher": "Ministry of Health & Family Welfare, Government of India",
+      "document_date": "2023",
+      "language": "en",
+      "exclude_pages_from_index": [],
+      "include_page_ranges": [[23, 83]],
+      "source_page": "https://ncvbdc.mohfw.gov.in/index1.php?lang=1&level=1&lid=3686&sublinkid=5899",
+      "pdf_url": "https://ncvbdc.mohfw.gov.in/Doc/National%20Guidelines%20for%20Clinical%20Management%20of%20Dengue%20Fever%202023.pdf",
+      "filename": "mohfw_dengue_2023.pdf"
+    }
+  ]
+}
