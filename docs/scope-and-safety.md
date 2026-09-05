@@ -85,7 +85,8 @@ The assistant must not delay this response by attempting document retrieval.
 - Permit downloads only from explicitly allowlisted MOHFW hostnames.
 - Reject redirects to non-allowlisted domains.
 - Accept a document only after validating its HTTP status, content type, PDF signature, and configured size limit.
-- Store the source URL, title, publication/version date when available, retrieval timestamp, and SHA-256 checksum.
+- Store the source URL, title, edition/version, publication date, license-review
+  status, active-version status, retrieval timestamp, and SHA-256 checksum.
 - Do not crawl or download documents during a user's question-answer request.
 - Do not silently fall back to general web search or the model's internal medical knowledge.
 

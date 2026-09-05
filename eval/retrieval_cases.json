@@ -1,8 +1,8 @@
 {
-  "dataset_version": 1,
+  "dataset_version": 2,
   "description": "Small manually curated retrieval smoke set; expand before deployment.",
   "default_k": 5,
-  "minimum_recall_at_k": 0.8,
+  "minimum_answerable_recall_at_k": 0.8,
   "cases": [
     {
       "case_id": "dengue_warning_signs",

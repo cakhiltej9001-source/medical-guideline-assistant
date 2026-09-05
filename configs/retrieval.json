@@ -1,5 +1,5 @@
 {
-  "retrieval_version": 1,
+  "retrieval_version": 2,
   "database_path": "data/index/guidelines.sqlite3",
   "embedding": {
     "provider": "gemini",
@@ -15,5 +15,11 @@
     "dense_candidates": 20,
     "final_results": 10,
     "rrf_constant": 60
+  },
+  "reranking": {
+    "enabled": true,
+    "model": "Xenova/ms-marco-MiniLM-L-6-v2",
+    "candidate_count": 10,
+    "minimum_top_score": 0.20
   }
 }

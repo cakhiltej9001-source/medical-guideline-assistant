@@ -3,3 +3,4 @@ pdfplumber==0.11.9
 google-genai==2.20.0
 python-dotenv==1.2.3
 streamlit==1.63.0
+fastembed==0.8.0

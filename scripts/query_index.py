@@ -25,6 +25,10 @@ from medical_guideline_assistant.retrieval.index import (  # noqa: E402
     RetrievalIndexError,
     search_index,
 )
+from medical_guideline_assistant.retrieval.reranker import (  # noqa: E402
+    CrossEncoderReranker,
+    RerankingError,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,7 +64,9 @@ def main() -> int:
             embedding_provider=provider,
             source_ids=tuple(args.source_id) if args.source_id else None,
         )
-    except (EmbeddingError, RetrievalConfigError, RetrievalIndexError) as exc:
+        if config.reranking.enabled:
+            results = CrossEncoderReranker(config.reranking).rerank(args.query, results)
+    except (EmbeddingError, RetrievalConfigError, RetrievalIndexError, RerankingError) as exc:
         print(f"Search failed: {exc}", file=sys.stderr)
         return 1
     finally:

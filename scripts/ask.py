@@ -31,6 +31,10 @@ from medical_guideline_assistant.retrieval.embeddings import (  # noqa: E402
     GeminiEmbeddingProvider,
 )
 from medical_guideline_assistant.retrieval.index import RetrievalIndexError  # noqa: E402
+from medical_guideline_assistant.retrieval.reranker import (  # noqa: E402
+    CrossEncoderReranker,
+    RerankingError,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,6 +59,7 @@ def main() -> int:
         )
         embedding_provider = GeminiEmbeddingProvider(retrieval_config.embedding)
         generator = GeminiGroundedGenerator(generation_config)
+        reranker = CrossEncoderReranker(retrieval_config.reranking)
         outcome = answer_query(
             query=args.query,
             database_path=PROJECT_ROOT / retrieval_config.database_path,
@@ -62,6 +67,7 @@ def main() -> int:
             generation_config=generation_config,
             generator=generator,
             embedding_provider=embedding_provider,
+            reranker=reranker,
         )
     except (
         EmbeddingError,
@@ -69,6 +75,7 @@ def main() -> int:
         GenerationError,
         RetrievalConfigError,
         RetrievalIndexError,
+        RerankingError,
         OSError,
     ) as exc:
         print(f"Request failed safely: {exc}", file=sys.stderr)

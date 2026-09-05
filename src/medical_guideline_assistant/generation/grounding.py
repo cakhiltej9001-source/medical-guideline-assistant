@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from ..retrieval.index import SearchResult
 
@@ -85,13 +85,41 @@ MEDICATION_CONTEXT = re.compile(
     flags=re.IGNORECASE,
 )
 PERSONALIZED_OUTPUT = re.compile(
-    r"\b(?:you have|you should|you need to|take this|start taking|stop taking)\b",
+    r"\b(?:you\s+(?:have|may have|likely have|are suffering from|should|must|need to)|"
+    r"take this|start taking|stop taking|increase your|decrease your)\b",
+    flags=re.IGNORECASE,
+)
+EMERGENCY_OUTPUT = re.compile(
+    r"\b(?:call (?:an ambulance|emergency services)|go to (?:an? )?emergency|"
+    r"seek immediate (?:care|medical attention)|dial \d{3})\b",
     flags=re.IGNORECASE,
 )
 
 
 class GroundingValidationError(RuntimeError):
     """Raised when model output is structurally unsafe or insufficiently grounded."""
+
+
+class ClaimSupportScorer(Protocol):
+    def score_pair(self, left: str, right: str) -> float: ...
+
+
+@dataclass(frozen=True)
+class OutputSafetyDecision:
+    allowed: bool
+    category: str
+    reason: str | None = None
+
+
+def classify_output(text: str) -> OutputSafetyDecision:
+    """Classify generated text before it is allowed to reach the user."""
+    if _contains_forbidden_dosage(text):
+        return OutputSafetyDecision(False, "medication_dosage", "Medication dosage detected.")
+    if EMERGENCY_OUTPUT.search(text):
+        return OutputSafetyDecision(False, "emergency_guidance", "Emergency directive detected.")
+    if PERSONALIZED_OUTPUT.search(text):
+        return OutputSafetyDecision(False, "personalized_advice", "Personalized directive detected.")
+    return OutputSafetyDecision(True, "allowed")
 
 
 @dataclass(frozen=True)
@@ -170,6 +198,8 @@ def validate_grounded_payload(
     results: list[SearchResult],
     disclaimer: str,
     minimum_claim_token_overlap: float,
+    support_scorer: ClaimSupportScorer | None = None,
+    minimum_claim_support_score: float = 0.0,
 ) -> GroundedAnswer:
     """Resolve only real citation IDs and reject weakly supported or unsafe claims."""
     if set(payload) != {"status", "claims"}:
@@ -196,13 +226,10 @@ def validate_grounded_payload(
         chunk_ids = raw_claim.get("chunk_ids")
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 600:
             raise GroundingValidationError(f"Claim {index} text is invalid.")
-        if _contains_forbidden_dosage(text):
+        safety = classify_output(text)
+        if not safety.allowed:
             raise GroundingValidationError(
-                f"Claim {index} contains a forbidden medication dosage."
-            )
-        if PERSONALIZED_OUTPUT.search(text):
-            raise GroundingValidationError(
-                f"Claim {index} contains a personalized directive."
+                f"Claim {index} failed output safety: {safety.category}."
             )
         if not isinstance(chunk_ids, list) or not chunk_ids:
             raise GroundingValidationError(f"Claim {index} has no citations.")
@@ -218,6 +245,17 @@ def validate_grounded_payload(
             raise GroundingValidationError(
                 f"Claim {index} has insufficient lexical evidence overlap."
             )
+        if support_scorer is not None:
+            try:
+                support_score = support_scorer.score_pair(text, combined_evidence)
+            except Exception as exc:
+                raise GroundingValidationError(
+                    f"Claim {index} semantic support scoring failed."
+                ) from exc
+            if support_score < minimum_claim_support_score:
+                raise GroundingValidationError(
+                    f"Claim {index} has insufficient semantic evidence support."
+                )
         citations = [
             Citation(
                 chunk_id=result.chunk_id,

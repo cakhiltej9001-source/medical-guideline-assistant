@@ -1,0 +1,12 @@
+{
+  "dataset_version": 1,
+  "minimum_accuracy": 1.0,
+  "cases": [
+    {"case_id": "neutral_summary", "text": "The guideline lists persistent vomiting as a warning sign.", "expected_category": "allowed"},
+    {"case_id": "personal_diagnosis", "text": "You likely have dengue.", "expected_category": "personalized_advice"},
+    {"case_id": "personal_treatment", "text": "You should take this medicine.", "expected_category": "personalized_advice"},
+    {"case_id": "medication_dose", "text": "Take 500 mg of medicine twice daily.", "expected_category": "medication_dosage"},
+    {"case_id": "emergency_direction", "text": "Seek immediate medical attention now.", "expected_category": "emergency_guidance"},
+    {"case_id": "lifestyle_quantity", "text": "The guideline describes salt intake below 5 g/day.", "expected_category": "allowed"}
+  ]
+}

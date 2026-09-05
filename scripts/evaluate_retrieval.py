@@ -1,4 +1,4 @@
-"""Measure page-level retrieval recall before adding answer generation."""
+"""Measure hybrid retrieval, cross-encoder reranking, and page-level recall."""
 
 from __future__ import annotations
 
@@ -24,6 +24,10 @@ from medical_guideline_assistant.retrieval.embeddings import (  # noqa: E402
 from medical_guideline_assistant.retrieval.index import (  # noqa: E402
     RetrievalIndexError,
     search_index,
+)
+from medical_guideline_assistant.retrieval.reranker import (  # noqa: E402
+    CrossEncoderReranker,
+    RerankingError,
 )
 
 
@@ -53,9 +57,12 @@ def main() -> int:
         if args.hybrid:
             provider = GeminiEmbeddingProvider(config.embedding)
 
+        reranker = CrossEncoderReranker(config.reranking) if config.reranking.enabled else None
         case_reports = []
         reciprocal_rank_total = 0.0
         hits = 0
+        page_recall_total = 0.0
+        confident_cases = 0
         for case in dataset["cases"]:
             results = search_index(
                 PROJECT_ROOT / config.database_path,
@@ -63,7 +70,21 @@ def main() -> int:
                 config,
                 embedding_provider=provider,
             )
+            if reranker is not None:
+                results = reranker.rerank(case["query"], results)
             relevant_pages = set(case["relevant_pages"])
+            retrieved_pages = {
+                page
+                for result in results[:k]
+                if result.source_id == case["expected_source_id"]
+                for page in result.pages
+            }
+            page_recall = (
+                len(relevant_pages.intersection(retrieved_pages)) / len(relevant_pages)
+                if relevant_pages
+                else 0.0
+            )
+            page_recall_total += page_recall
             rank = next(
                 (
                     position
@@ -76,30 +97,49 @@ def main() -> int:
             if rank is not None:
                 hits += 1
                 reciprocal_rank_total += 1 / rank
+            top_confidence = results[0].rerank_score if results else None
+            confidence_passed = (
+                top_confidence is None
+                or top_confidence >= config.reranking.minimum_top_score
+            )
+            confident_cases += int(confidence_passed)
             case_reports.append(
                 {
                     "case_id": case["case_id"],
                     "hit": rank is not None,
                     "rank": rank,
+                    "page_recall": page_recall,
+                    "top_confidence": top_confidence,
+                    "confidence_passed": confidence_passed,
                     "top_chunk_id": results[0].chunk_id if results else None,
                 }
             )
 
         case_count = len(case_reports)
-        recall = hits / case_count if case_count else 0.0
+        hit_rate = hits / case_count if case_count else 0.0
+        page_coverage = page_recall_total / case_count if case_count else 0.0
         report = {
-            "mode": "hybrid" if provider else "lexical_only",
+            "mode": "hybrid_reranked" if provider else "lexical_reranked",
             "cases": case_count,
-            f"recall_at_{k}": recall,
+            f"hit_rate_at_{k}": hit_rate,
+            f"answerable_recall_at_{k}": hit_rate,
+            f"gold_page_coverage_at_{k}": page_coverage,
             f"mrr_at_{k}": reciprocal_rank_total / case_count if case_count else 0.0,
-            "minimum_required_recall": dataset["minimum_recall_at_k"],
-            "passed": recall >= float(dataset["minimum_recall_at_k"]),
+            "confidence_acceptance_rate": confident_cases / case_count if case_count else 0.0,
+            "minimum_required_answerable_recall": dataset[
+                "minimum_answerable_recall_at_k"
+            ],
+            "passed": (
+                hit_rate >= float(dataset["minimum_answerable_recall_at_k"])
+                and confident_cases == case_count
+            ),
             "case_reports": case_reports,
         }
     except (
         EmbeddingError,
         RetrievalConfigError,
         RetrievalIndexError,
+        RerankingError,
         OSError,
         ValueError,
         json.JSONDecodeError,

@@ -10,3 +10,13 @@
 - Replacement source: NCVBDC/MOHFW *National Guidelines for Clinical Management of Dengue Fever 2023*.
 
 This incident demonstrates why content validation and visual PDF review are required even when a link is published on an official government page.
+
+## 2026-09-06: Manifest governance update
+
+- Manifest version 2 records the selected edition and active-version status for
+  every indexed document.
+- Publisher license/redistribution terms were not explicitly stated on the source
+  pages reviewed, so each entry is marked for license verification rather than
+  assuming permission.
+- The hybrid SQLite index was rebuilt from the audited 443 chunks with 443 cached
+  embedding hits and zero new embedding API calls.

@@ -59,6 +59,7 @@ class SearchResult:
     dense_rank: int | None
     lexical_score: float | None
     dense_score: float | None
+    rerank_score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

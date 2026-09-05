@@ -24,6 +24,7 @@ class GenerationConfig:
     maximum_context_chunks: int
     minimum_claim_token_overlap: float
     standard_disclaimer: str
+    minimum_claim_support_score: float = 0.20
 
     @classmethod
     def from_path(cls, path: Path) -> "GenerationConfig":
@@ -52,5 +53,7 @@ class GenerationConfig:
             raise GenerationConfigError("Maximum context chunks must be 1 to 10.")
         if not 0 <= self.minimum_claim_token_overlap <= 1:
             raise GenerationConfigError("Claim overlap threshold must be between 0 and 1.")
+        if not 0 <= self.minimum_claim_support_score <= 1:
+            raise GenerationConfigError("Claim support threshold must be between 0 and 1.")
         if not self.standard_disclaimer.strip():
             raise GenerationConfigError("A standard disclaimer is required.")

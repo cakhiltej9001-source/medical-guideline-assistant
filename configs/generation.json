@@ -1,5 +1,5 @@
 {
-  "generation_version": 1,
+  "generation_version": 2,
   "provider": "gemini",
   "model": "gemini-3.5-flash-lite",
   "temperature": 0.1,
@@ -9,5 +9,6 @@
   "maximum_validation_attempts": 2,
   "maximum_context_chunks": 5,
   "minimum_claim_token_overlap": 0.2,
+  "minimum_claim_support_score": 0.2,
   "standard_disclaimer": "This assistant provides information from indexed official guidelines only and does not provide personalized medical advice."
 }

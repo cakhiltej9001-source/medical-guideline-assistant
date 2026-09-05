@@ -60,6 +60,9 @@ from medical_guideline_assistant.retrieval.config import RetrievalConfig  # noqa
 from medical_guideline_assistant.retrieval.embeddings import (  # noqa: E402
     GeminiEmbeddingProvider,
 )
+from medical_guideline_assistant.retrieval.reranker import (  # noqa: E402
+    CrossEncoderReranker,
+)
 from medical_guideline_assistant.ui.rate_limit import consume_request  # noqa: E402
 
 
@@ -91,12 +94,33 @@ def get_api_key() -> str | None:
     return str(secret) if secret else None
 
 
+@st.cache_resource
+def get_reranker(model: str, candidate_count: int, threshold: float):
+    from medical_guideline_assistant.retrieval.config import RerankingConfig
+
+    return CrossEncoderReranker(
+        RerankingConfig(
+            enabled=True,
+            model=model,
+            candidate_count=candidate_count,
+            minimum_top_score=threshold,
+        )
+    )
+
+
 def execute_query(query: str) -> AnswerOutcome:
     preflight = preflight_query(query)
     if preflight is not None:
         return preflight
     retrieval_config, generation_config = load_configs()
     api_key = get_api_key()
+    reranker = None
+    if retrieval_config.reranking.enabled:
+        reranker = get_reranker(
+            retrieval_config.reranking.model,
+            retrieval_config.reranking.candidate_count,
+            retrieval_config.reranking.minimum_top_score,
+        )
     with ExitStack() as resources:
         embedding_provider = GeminiEmbeddingProvider(retrieval_config.embedding, api_key)
         resources.callback(embedding_provider.close)
@@ -109,6 +133,7 @@ def execute_query(query: str) -> AnswerOutcome:
             generation_config=generation_config,
             generator=generator,
             embedding_provider=embedding_provider,
+            reranker=reranker,
         )
 
 

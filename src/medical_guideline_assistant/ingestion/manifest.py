@@ -26,4 +26,18 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
     if None in source_ids or len(source_ids) != len(set(source_ids)):
         raise ManifestError("Every manifest document needs a unique source_id.")
 
+    required_metadata = {
+        "title", "publisher", "document_date", "version", "license_status", "status"
+    }
+    for document in documents:
+        missing = sorted(required_metadata.difference(document))
+        if missing:
+            raise ManifestError(
+                f"Source {document['source_id']} is missing metadata: {', '.join(missing)}."
+            )
+        if document["status"] != "active":
+            raise ManifestError(
+                f"Source {document['source_id']} is not an active approved version."
+            )
+
     return manifest

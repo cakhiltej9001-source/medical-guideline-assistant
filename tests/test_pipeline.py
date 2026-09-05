@@ -3,6 +3,7 @@
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ from medical_guideline_assistant.retrieval.config import (  # noqa: E402
     EmbeddingConfig,
     RetrievalConfig,
     SearchConfig,
+    RerankingConfig,
 )
 from medical_guideline_assistant.retrieval.embeddings import EmbeddingError  # noqa: E402
 from medical_guideline_assistant.retrieval.index import build_index  # noqa: E402
@@ -67,6 +69,11 @@ class FailingQueryEmbeddingProvider:
         raise EmbeddingError("simulated temporary failure")
 
 
+class LowConfidenceReranker:
+    def rerank(self, query, results):
+        return [replace(result, rerank_score=0.05) for result in results]
+
+
 class PipelineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -109,6 +116,24 @@ class PipelineTests(unittest.TestCase):
     def test_no_lexical_evidence_returns_insufficient(self) -> None:
         outcome = retrieve_safely("Explain asthma inhalers.", self.database, CONFIG)
         self.assertEqual(outcome.status, "insufficient_evidence")
+        self.assertEqual(outcome.results, [])
+
+    def test_low_cross_encoder_confidence_refuses_before_generation(self) -> None:
+        config = replace(
+            CONFIG,
+            reranking=RerankingConfig(
+                enabled=True, candidate_count=5, minimum_top_score=0.20
+            ),
+        )
+        outcome = retrieve_safely(
+            "What dengue warning signs are listed?",
+            self.database,
+            config,
+            reranker=LowConfidenceReranker(),
+        )
+        self.assertEqual(outcome.status, "insufficient_evidence")
+        self.assertEqual(outcome.reranking_status, "applied")
+        self.assertEqual(outcome.top_confidence, 0.05)
         self.assertEqual(outcome.results, [])
 
 

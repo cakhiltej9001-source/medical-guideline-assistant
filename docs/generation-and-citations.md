@@ -31,8 +31,10 @@ The validator rejects the entire output when any claim:
 1. has an unexpected JSON shape;
 2. cites a missing or non-retrieved chunk ID;
 3. repeats citation IDs or omits citations;
-4. contains dosage or personalized-directive patterns; or
-5. falls below the configured lexical-overlap check against cited evidence.
+4. is classified as personalized diagnosis/advice, medication dosage, or an
+   emergency directive;
+5. falls below the configured lexical-overlap check against cited evidence; or
+6. falls below the cross-encoder semantic-support threshold.
 
 The dosage check distinguishes medication quantities from source-backed lifestyle
 measurements. For example, a cited dietary salt amount can be summarized, while a
@@ -54,11 +56,11 @@ never logged or stored in the index.
 
 ## Verification
 
-The test suite covers a valid cited answer, a fabricated citation, unsafe dosage
-language, weak evidence overlap, bounded guideline lists, and proof that refused
-queries never invoke generation. A live smoke test answered the dengue warning
-signs question using real indexed evidence from the official guideline and
-resolved every displayed citation to page 37.
+The test suite covers valid cited answers, fabricated citations, unsafe output,
+weak lexical and semantic evidence support, bounded guideline lists, and proof
+that refused queries never invoke generation. A live console smoke test completed
+the full hybrid retrieval, cross-encoder reranking, Gemini generation, semantic
+support, and trusted citation-resolution path against the dengue guideline.
 
 Run the local checks with:
 
@@ -71,8 +73,8 @@ The second command consumes Gemini API quota.
 
 ## Known limitation
 
-Token overlap is a useful low-cost tripwire, not proof that a cited passage
-semantically entails a claim. Before deployment, add a held-out answer benchmark
-and measure claim faithfulness, citation correctness, refusal accuracy, latency,
-and API-failure rate. A stronger verifier or human review is appropriate for any
-medical use beyond this educational demonstration.
+Token overlap plus a general-domain relevance cross-encoder is stronger than a
+lexical check alone, but it is not proof that a cited passage logically entails a
+claim. A production system needs a larger held-out answer benchmark, a medical
+entailment verifier, expert review, and measurements for faithfulness, citation
+correctness, refusal accuracy, latency percentiles, and API-failure rate.

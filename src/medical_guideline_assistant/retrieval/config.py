@@ -31,11 +31,20 @@ class SearchConfig:
 
 
 @dataclass(frozen=True)
+class RerankingConfig:
+    enabled: bool = False
+    model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    candidate_count: int = 10
+    minimum_top_score: float = 0.20
+
+
+@dataclass(frozen=True)
 class RetrievalConfig:
     retrieval_version: int
     database_path: str
     embedding: EmbeddingConfig
     search: SearchConfig
+    reranking: RerankingConfig = RerankingConfig()
 
     @classmethod
     def from_path(cls, path: Path) -> "RetrievalConfig":
@@ -43,11 +52,13 @@ class RetrievalConfig:
             raw = json.loads(path.read_text(encoding="utf-8"))
             embedding = EmbeddingConfig(**raw["embedding"])
             search = SearchConfig(**raw["search"])
+            reranking = RerankingConfig(**raw.get("reranking", {}))
             config = cls(
                 retrieval_version=int(raw["retrieval_version"]),
                 database_path=str(raw["database_path"]),
                 embedding=embedding,
                 search=search,
+                reranking=reranking,
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise RetrievalConfigError(f"Could not load retrieval config: {exc}") from exc
@@ -83,3 +94,15 @@ class RetrievalConfig:
             self.search.bm25_candidates + self.search.dense_candidates
         ):
             raise RetrievalConfigError("Final result count exceeds the candidate pool.")
+        if self.reranking.enabled:
+            if self.reranking.model not in {
+                "Xenova/ms-marco-MiniLM-L-6-v2",
+                "Xenova/ms-marco-MiniLM-L-12-v2",
+            }:
+                raise RetrievalConfigError("Reranker must be an approved cross-encoder model.")
+            if not 1 <= self.reranking.candidate_count <= self.search.final_results:
+                raise RetrievalConfigError(
+                    "Reranking candidate count must be between 1 and final_results."
+                )
+            if not 0.0 <= self.reranking.minimum_top_score <= 1.0:
+                raise RetrievalConfigError("Reranker confidence threshold must be in [0, 1].")

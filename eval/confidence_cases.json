@@ -1,0 +1,11 @@
+{
+  "dataset_version": 1,
+  "minimum_accuracy": 0.8,
+  "cases": [
+    {"case_id": "answerable_dengue", "query": "What are the warning signs of dengue?", "expected_accept": true},
+    {"case_id": "answerable_hypertension", "query": "How should blood pressure be measured?", "expected_accept": true},
+    {"case_id": "irrelevant_dengue_chemotherapy", "query": "What chemotherapy regimens are described in the dengue guideline?", "expected_accept": false},
+    {"case_id": "irrelevant_hypertension_brain_tumor", "query": "What MRI findings for brain tumors are in the hypertension guideline?", "expected_accept": false},
+    {"case_id": "irrelevant_foot_dialysis", "query": "What kidney dialysis procedure is in the diabetic foot guideline?", "expected_accept": false}
+  ]
+}

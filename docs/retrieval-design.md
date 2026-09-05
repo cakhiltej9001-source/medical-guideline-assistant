@@ -19,14 +19,19 @@ replaced without changing the retrieval interface.
 1. BM25 retrieves up to 20 lexical candidates.
 2. Gemini retrieves up to 20 semantically similar candidates.
 3. Reciprocal-rank fusion combines ranks using `1 / (60 + rank)`.
-4. The top 10 fused chunks continue to later confidence scoring and reranking.
+4. FastEmbed's local ONNX `Xenova/ms-marco-MiniLM-L-6-v2` cross-encoder jointly
+   scores the query against each of the top 10 fused chunks.
+5. Results are reordered by cross-encoder score. A top-1 score below the calibrated
+   `0.20` threshold returns the standardized insufficient-evidence refusal.
 
 If the query-embedding request fails after bounded retries, retrieval degrades to
 the local BM25 index. The response is marked `lexical_fallback` so the interface
 can disclose the reduced retrieval mode while still applying normal citation and
 output validation.
 
-Rank fusion is used because BM25 and cosine scores are on different scales.
+Rank fusion is used because BM25 and cosine scores are on different scales. The
+cross-encoder model is cached by Streamlit and is limited to ten candidates to
+control CPU latency. Reranker load/scoring failures fail closed.
 
 ## Gemini embedding choice
 
@@ -84,8 +89,10 @@ Remove-Item Env:GEMINI_API_KEY
   accepted or stored.
 - Queries longer than 500 characters are rejected before retrieval.
 - Metadata filters can restrict results to exact approved source IDs.
-- The lexical baseline reaches Recall@5 = 1.00 and MRR@5 = 0.575 on six manually
-  curated smoke questions. Hybrid retrieval preserves Recall@5 = 1.00 and raises
-  MRR@5 to 0.833. This set is too small for a production claim.
-- Before deployment, expand the evaluation set, measure latency and API failures,
-  and choose a confidence/refusal threshold on held-out questions.
+- The reranked lexical run reaches Answerable Recall@5 = 1.00, MRR@5 = 0.917,
+  and gold-page coverage@5 = 0.722 on six curated questions.
+- The reranked hybrid run reaches Answerable Recall@5 = 1.00, MRR@5 = 0.917,
+  and gold-page coverage@5 = 0.806.
+- A five-case answerable/unanswerable calibration set reaches 100% accuracy at
+  the `0.20` top-1 threshold. These sets are too small for a production claim and
+  must be expanded with held-out, expert-reviewed examples.

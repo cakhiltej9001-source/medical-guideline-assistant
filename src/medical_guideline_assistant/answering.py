@@ -16,6 +16,7 @@ from .generation.grounding import (
 from .pipeline import RetrievalOutcome, retrieve_safely
 from .retrieval.config import RetrievalConfig
 from .retrieval.embeddings import EmbeddingProvider
+from .retrieval.reranker import RerankingProvider
 from .safety.guardrails import OUT_OF_SCOPE_REFUSAL, evaluate_input
 
 
@@ -64,6 +65,7 @@ def answer_query(
     generation_config: GenerationConfig,
     generator: GroundedGenerator,
     embedding_provider: EmbeddingProvider | None = None,
+    reranker: RerankingProvider | None = None,
 ) -> AnswerOutcome:
     """Refuse early, retrieve evidence, generate claims, then validate citations."""
     preflight = preflight_query(query)
@@ -74,6 +76,7 @@ def answer_query(
         database_path=database_path,
         config=retrieval_config,
         embedding_provider=embedding_provider,
+        reranker=reranker,
     )
     if retrieval.status != "evidence_retrieved":
         return AnswerOutcome(
@@ -98,6 +101,14 @@ def answer_query(
                     disclaimer=generation_config.standard_disclaimer,
                     minimum_claim_token_overlap=(
                         generation_config.minimum_claim_token_overlap
+                    ),
+                    support_scorer=(
+                        reranker
+                        if reranker is not None and hasattr(reranker, "score_pair")
+                        else None
+                    ),
+                    minimum_claim_support_score=(
+                        generation_config.minimum_claim_support_score
                     ),
                 )
                 break

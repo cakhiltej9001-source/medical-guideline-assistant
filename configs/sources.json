@@ -1,5 +1,5 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "source_page": "https://clinicalestablishments.mohfw.gov.in/en/standard-treatment-guidelines",
   "documents": [
     {
@@ -8,6 +8,9 @@
       "category": "Hypertension",
       "publisher": "Ministry of Health & Family Welfare, Government of India",
       "document_date": "2016-03",
+      "version": "March 2016 edition",
+      "status": "active",
+      "license_status": "Usage terms are not explicitly stated on the source page; verify before redistribution.",
       "language": "en",
       "exclude_pages_from_index": [1, 2, 44, 137, 138, 139, 140, 141, 142],
       "pdf_url": "https://clinicalestablishments.mohfw.gov.in/sites/default/files/standard-treatment-guidelines/5191.pdf",
@@ -19,6 +22,9 @@
       "category": "Diabetic Foot",
       "publisher": "Ministry of Health & Family Welfare, Government of India",
       "document_date": "2016-01",
+      "version": "January 2016 draft",
+      "status": "active",
+      "license_status": "Usage terms are not explicitly stated on the source page; verify before redistribution.",
       "language": "en",
       "exclude_pages_from_index": [],
       "include_page_ranges": [[3, 17]],
@@ -31,6 +37,9 @@
       "category": "Dengue",
       "publisher": "Ministry of Health & Family Welfare, Government of India",
       "document_date": "2023",
+      "version": "2023 edition",
+      "status": "active",
+      "license_status": "Usage terms are not explicitly stated on the source page; verify before redistribution.",
       "language": "en",
       "exclude_pages_from_index": [],
       "include_page_ranges": [[23, 83]],

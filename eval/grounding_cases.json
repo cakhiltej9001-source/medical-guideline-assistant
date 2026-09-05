@@ -1,0 +1,11 @@
+{
+  "dataset_version": 1,
+  "minimum_accuracy": 1.0,
+  "cases": [
+    {"case_id": "supported_claim", "claim": "Warning signs include persistent vomiting and abdominal pain.", "evidence": "Warning signs include persistent vomiting, abdominal pain, lethargy, and bleeding manifestations.", "chunk_ids": ["official:1"], "support_score": 0.95, "expected_valid": true},
+    {"case_id": "invented_citation", "claim": "Warning signs include persistent vomiting.", "evidence": "Warning signs include persistent vomiting.", "chunk_ids": ["invented:9"], "support_score": 0.95, "expected_valid": false},
+    {"case_id": "unsupported_claim", "claim": "The guideline describes lunar travel.", "evidence": "Warning signs include persistent vomiting and abdominal pain.", "chunk_ids": ["official:1"], "support_score": 0.05, "expected_valid": false},
+    {"case_id": "semantic_mismatch", "claim": "Hypertension warning signs include persistent vomiting.", "evidence": "Dengue warning signs include persistent vomiting.", "chunk_ids": ["official:1"], "support_score": 0.05, "expected_valid": false},
+    {"case_id": "unsafe_claim", "claim": "You should take 500 mg of medicine.", "evidence": "Warning signs include persistent vomiting and abdominal pain.", "chunk_ids": ["official:1"], "support_score": 0.95, "expected_valid": false}
+  ]
+}
