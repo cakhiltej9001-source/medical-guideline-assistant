@@ -1,5 +1,14 @@
 # Medical Guideline Assistant
 
+[![Live App](https://img.shields.io/badge/Live%20App-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://medical-guideline-assistant-luowhfprn5urrtnhgrgzq7.streamlit.app/)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini%20API-8E75B2?logo=googlegemini&logoColor=white)
+![RAG](https://img.shields.io/badge/Architecture-Hybrid%20RAG-0A7EA4)
+![Tests](https://img.shields.io/badge/Tests-57%20passing-2EA44F)
+![Safety](https://img.shields.io/badge/Safety%20checks-13%2F13-2EA44F?logo=checkmarx&logoColor=white)
+
+> 🩺 **Trusted guidelines in. Grounded answers out.**
+
 An educational retrieval-augmented generation (RAG) application that answers
 general questions using a curated collection of official Indian government
 medical guidelines. The application retrieves evidence before generation,
@@ -11,11 +20,11 @@ patient-data interpretation, and emergency requests.
 > personalized medical advice. Do not submit names, medical records, symptoms, or
 > other personal health information.
 
-## Live demo
+## 🚀 Live demo
 
 [Open the Medical Guideline Assistant on Streamlit Community Cloud](https://medical-guideline-assistant-luowhfprn5urrtnhgrgzq7.streamlit.app/)
 
-## Working application
+## 📸 Working application
 
 The deployed interface includes ready-made questions, a free-text guideline
 question field, and an educational-use safety notice.
@@ -27,7 +36,7 @@ source, exact PDF page, and a direct link to the government document.
 
 ![Grounded Streamlit answer with an official citation](docs/assets/streamlit-grounded-answer.png)
 
-## Project goal
+## 🎯 Project goal
 
 The project demonstrates how to:
 
@@ -38,7 +47,7 @@ The project demonstrates how to:
 - refuse unsafe or insufficiently supported requests; and
 - evaluate retrieval quality and safety behavior.
 
-## Indexed topics
+## 📚 Indexed topics
 
 The current corpus contains 443 audited chunks from three public guidelines:
 
@@ -54,7 +63,7 @@ only from explicitly approved MOHFW/NCVBDC hostnames, validates that each respon
 is a PDF, computes its SHA-256 digest, and saves provenance metadata. This is how
 external MOHFW links are retrieved without accepting arbitrary internet content.
 
-## Architecture
+## 🧠 Architecture
 
 ```text
 User question
@@ -83,7 +92,7 @@ Schema, safety, evidence-overlap, and citation-ID validation
 Answer claims + official URL + exact PDF page(s) + disclaimer
 ```
 
-## Technology
+## 🛠️ Technology
 
 - Python 3.12+
 - Streamlit
@@ -94,7 +103,7 @@ Answer claims + official URL + exact PDF page(s) + disclaimer
 - `pdfplumber` for PDF text extraction
 - Python `unittest` for automated tests
 
-## Safety design
+## 🛡️ Safety design
 
 The safety gate runs before retrieval or API access. It blocks:
 
@@ -115,7 +124,7 @@ These deterministic checks are guardrails, not proof of clinical correctness.
 See [`docs/scope-and-safety.md`](docs/scope-and-safety.md) and
 [`docs/generation-and-citations.md`](docs/generation-and-citations.md).
 
-## Local setup
+## 💻 Local setup
 
 Create a Google AI Studio API key, then clone the repository and run:
 
@@ -142,7 +151,7 @@ python -m streamlit run streamlit_app.py
 
 Then open <http://localhost:8501>.
 
-## Example questions
+## 💬 Example questions
 
 - According to the dengue guideline, what warning signs are listed?
 - What phases of dengue illness are described in the guideline?
@@ -153,7 +162,7 @@ Then open <http://localhost:8501>.
 
 The same questions are available from the application's dropdown.
 
-## Rebuild the corpus and index
+## 🔄 Rebuild the corpus and index
 
 The committed runtime index makes hosted startup deterministic. To reproduce it
 from the allowlisted sources:
@@ -170,7 +179,7 @@ Embedding creation is checkpointed after each successful batch and paced for
 free-tier limits. Downloaded PDFs, extracted intermediate files, and the embedding
 cache are intentionally excluded from Git.
 
-## Command-line usage
+## ⌨️ Command-line usage
 
 Inspect retrieval without answer generation:
 
@@ -184,7 +193,7 @@ Run the complete guarded pipeline:
 python scripts/ask.py "According to the dengue guideline, what warning signs are listed?"
 ```
 
-## Tests and evaluation
+## ✅ Tests and evaluation
 
 Run all tests:
 
@@ -216,7 +225,7 @@ clinical-performance claims. A real deployment needs substantially larger held-o
 sets for retrieval recall, refusal accuracy, claim faithfulness, citation
 correctness, latency percentiles, and API failure rates.
 
-## Deploy on Streamlit Community Cloud
+## ☁️ Deploy on Streamlit Community Cloud
 
 1. Push this repository to GitHub.
 2. Sign in at <https://share.streamlit.io> and connect the GitHub account.
@@ -233,7 +242,7 @@ Use a newly rotated key for deployment. The application's per-session limiter is
 only a demonstration control; a public production service needs a shared
 server-side limiter, quotas, monitoring, abuse controls, and privacy-safe logs.
 
-## Project structure
+## 🗂️ Project structure
 
 ```text
 configs/                  Source, chunking, retrieval, and generation settings
@@ -251,7 +260,7 @@ tests/                    Automated unit and render-level tests
 streamlit_app.py          Streamlit entrypoint
 ```
 
-## Common interview questions and sample answers
+## 🎤 Common interview questions and sample answers
 
 These answers are intentionally concise. In an interview, explain each idea in
 your own words and connect it to a design choice or measurement from this project.
@@ -372,7 +381,7 @@ and lexical evidence overlap is not the same as semantic entailment. The system
 therefore refuses aggressively and must not be used for diagnosis or clinical
 decision-making.
 
-## Known limitations
+## ⚠️ Known limitations
 
 - The corpus covers only three guidelines and includes one document marked draft.
 - Lexical overlap is a low-cost grounding tripwire, not semantic entailment.
@@ -381,7 +390,7 @@ decision-making.
 - This project must not be used for diagnosis, treatment, emergencies, or clinical
   decision-making.
 
-## Documentation
+## 📖 Documentation
 
 - [`docs/source-integrity-log.md`](docs/source-integrity-log.md)
 - [`docs/retrieval-design.md`](docs/retrieval-design.md)
