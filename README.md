@@ -54,6 +54,7 @@ end-to-end walkthrough, and then explore the code using the file guide.
 - [Understand the technology choices](#-technology)
 - [Run it locally](#-local-setup)
 - [Understand the evaluation results](#-tests-and-evaluation)
+- [Troubleshoot common issues](#-common-issues-and-resolutions)
 - [Prepare for interviews](#-common-interview-questions-and-sample-answers)
 
 ## 📸 Working application
@@ -475,16 +476,71 @@ clinical-performance claims. A real deployment needs substantially larger held-o
 sets for retrieval recall, refusal accuracy, claim faithfulness, citation
 correctness, latency percentiles, and API failure rates.
 
-## 🔧 Troubleshooting and operational behavior
+## 🔧 Common issues and resolutions
 
-| What you see | What it means / what to check |
-| --- | --- |
-| Missing API key or authentication failure | Set `GEMINI_API_KEY` in local `.env` or hosted Streamlit Secrets. Never paste the key into a question, screenshot, or GitHub issue. |
-| Semantic search unavailable; keyword fallback used | Query embedding retrieval failed. BM25 can still retrieve candidates, but reranking, generation, and validation must still succeed. |
-| Insufficient evidence | The corpus or retrieved passages do not meet the relevance gate. Try a general question about an indexed topic; do not lower safety thresholds just to force an answer. |
-| Answer blocked by validation | At least one output check failed. Developers should inspect schema, citation IDs, support scores, and safety decisions with non-sensitive test inputs. |
-| First request takes longer | The local reranker may be downloading/loading, and the hosted app may be starting up. Later requests can reuse cached resources. |
-| Quota or rate-limit message | Wait before retrying and check the provider's quota. The app also limits each session to five requests per 60 seconds; this is not a global abuse-control system. |
+During development, the interface displayed generic request failures, semantic
+search fallback notices, and answers blocked by validation. Those messages identify
+an outcome, not necessarily its root cause. The table below explains these and
+other common troubleshooting scenarios; it is not a claim that every issue occurred
+or that one fix resolves every failure.
+
+| Issue / symptom | Likely cause | Resolution and verification |
+| --- | --- | --- |
+| **“The request failed safely”** | A broad error handler caught a failure in the index, API, model, or another pipeline stage. The screenshot alone cannot identify which. | Check the developer console/host logs, then isolate retrieval, generation, and validation using the commands below. Record the failing stage and sanitized error type rather than guessing that the API key is wrong. |
+| **Missing key or authentication failure** | `GEMINI_API_KEY` is absent, invalid, or configured in a different environment. | Set the key in local `.env` or hosted Streamlit Secrets, as appropriate, and restart/reload the app. Run the relevant connection check. Local `.env` does not configure the hosted deployment. Never put keys into questions or GitHub. |
+| **Quota or rate-limit failure** | Provider limits or the app's session limiter were reached. | Wait before retrying and inspect the project's quota. Avoid repeated clicks or unbounded retries. The app permits five requests per session per 60 seconds; that is separate from provider limits and is not global abuse protection. |
+| **Semantic search unavailable; keyword fallback used** | Query embedding retrieval failed, for example due to connectivity or API access. | Test embeddings separately. BM25 fallback lets local retrieval continue, but does not replace Gemini answer generation. Reranking and validation still apply. Verify hybrid retrieval again after the underlying failure is resolved. |
+| **Missing or unreadable local index** | The SQLite file is absent, corrupt, or the configured path is wrong. | Check `database_path` in `configs/retrieval.json` and the corresponding file in `data/index/`. Use the committed index or follow the rebuild steps above. Confirm a local retrieval command succeeds before testing generation. |
+| **Model unavailable or embedding mismatch** | Model access/configuration changed, or query vectors no longer match the indexed embedding model/dimensions. | Check the configured model and access. When changing embedding model or dimensionality, regenerate the document embeddings and index too; do not mix incompatible vectors. Test both retrieval and generation after a configuration change. |
+| **Insufficient-evidence refusal** | The topic is absent from the corpus, no useful passage was retrieved, or the top reranker score is below the threshold. | Try a general question about one of the three indexed topics. For an expected answerable question, inspect retrieved passages and scores, then evaluate any retrieval change. Do not lower the threshold merely to force an answer. |
+| **Answer blocked by validation** | Generated JSON, citation IDs, claim support, or output safety failed a check. | Inspect the failed check with a non-sensitive example. Compare each claim with its cited passage, and improve retrieval or generation if needed. Add a regression test. Keep validation enabled; a plausible-looking answer is not enough. |
+| **Personal symptom question is refused** | The safety gate intentionally blocks personalized medical requests. | This is expected behavior, not an API error. Use a general document question such as “What phases of dengue illness are described in the guideline?” Do not reword a personal request to evade the gate. |
+| **First request is slow / reranker fails to load** | Cold startup or the first ONNX model download; failed downloads or resource limits can prevent loading. | Allow the initial load to finish and inspect download/resource errors if it fails. Reuse the cached model on subsequent requests. If reranking is unavailable, the app must refuse rather than bypass its confidence gate. |
+| **PDF extraction produces little or broken text** | Scanned pages, tables, or layout interfere with extraction. | Review flagged pages against the original PDF, verify page references, and rerun the corpus audit. OCR would require an additional reviewed ingestion step; do not assume the current extractor reads every image. |
+| **Missing Python module or app will not start** | Packages were installed into another Python environment or dependencies are incomplete. | Use the project virtual environment and run `python -m pip install -r requirements.txt`, followed by `python -m streamlit run streamlit_app.py`. If activation is blocked, call `.\.venv\Scripts\python.exe` directly rather than weakening system security settings. |
+| **Works locally but not on the public app** | Hosted secrets, dependencies, files, or startup state differ from local development. | Check the deployed branch and `streamlit_app.py` entrypoint, hosted secrets, index presence, and deployment logs. After redeployment, test one allowed question, one safety refusal, and one unsupported question. |
+| **Someone else cannot open `localhost:8501`** | `localhost` refers to the viewer's own computer. | Share the public Streamlit demo link near the top of this README, not the local development address. |
+
+### Debug one stage at a time
+
+Run these from the repository root with the project environment active:
+
+```powershell
+# 1. Check local retrieval and reranking without Gemini answer generation.
+python scripts/query_index.py "What are the warning signs of dengue?"
+
+# 2. Test embedding access independently.
+python scripts/check_gemini_connection.py
+
+# 3. Test text-generation access independently.
+python scripts/check_generation_connection.py
+
+# 4. Check semantic retrieval plus the local ranking stages.
+python scripts/query_index.py "What are the warning signs of dengue?" --hybrid
+
+# 5. Exercise the complete guarded answering path.
+python scripts/ask.py "According to the dengue guideline, what warning signs are listed?"
+```
+
+The first command can need internet for the initial reranker download. The API
+checks make real requests and may consume quota; they load local `.env`, not hosted
+Streamlit Secrets. They currently use hard-coded model names, so keep them aligned
+with the application configuration when changing models. A successful connection
+test proves access to that API operation, not end-to-end answer correctness.
+
+After a code fix, run `python -m unittest discover -v` and the evaluation relevant
+to the changed stage. For example, retrieval changes need retrieval/confidence
+checks, while validator changes need grounding/output-safety checks. Reproduce
+the original failure and verify it is resolved without weakening refusals.
+
+### Keep debugging safe
+
+- Record the stage, error category, and reproduction steps using synthetic or
+  general guideline questions. Review logs before sharing them.
+- Never publish API keys, `.env`, Streamlit Secrets, or personal medical data.
+  If a key has been exposed, revoke/rotate it and update the affected environments.
+- Do not disable citation checks, safety filters, or confidence gates to make a
+  failed request appear successful.
 
 Latency is the time spent handling a request. This project limits context size,
 caches reusable resources, and bounds retries to control latency and API use.
