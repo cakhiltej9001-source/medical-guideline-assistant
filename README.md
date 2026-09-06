@@ -24,6 +24,38 @@ patient-data interpretation, and emergency requests.
 
 [Open the Medical Guideline Assistant on Streamlit Community Cloud](https://medical-guideline-assistant-luowhfprn5urrtnhgrgzq7.streamlit.app/)
 
+## 👋 Start here if you are new to AI projects
+
+Imagine a reader looking for one explanation inside several long government
+guideline PDFs. This project helps locate the relevant passages and turn them
+into a readable summary with source references. It is designed for general
+document questions, such as “What warning signs are listed in the dengue
+guideline?” Its purpose is to explain the documents, rather than assess a person's
+health.
+
+The main idea is **retrieve first, then generate**. The application searches a
+prepared collection of documents, selects useful passages, and gives those
+passages to Gemini to draft an answer. Application code checks the result before
+displaying it. This workflow is called **retrieval-augmented generation**, or RAG.
+
+Think of it as an open-book exercise: the search system finds the pages, the
+language model writes the explanation, and the validator checks its references
+and applies the project's output rules. Having the book available helps, but
+does not guarantee that every explanation is correct.
+
+**Suggested reading path:** try the demo, read the concepts below, follow the
+end-to-end walkthrough, and then explore the code using the file guide.
+
+### 🧭 Guide to this README
+
+- [Try the app and understand the screenshots](#-working-application)
+- [Learn the core concepts](#-core-concepts-explained)
+- [Follow the complete workflow](#-end-to-end-walkthrough)
+- [Understand the technology choices](#-technology)
+- [Run it locally](#-local-setup)
+- [Understand the evaluation results](#-tests-and-evaluation)
+- [Prepare for interviews](#-common-interview-questions-and-sample-answers)
+
 ## 📸 Working application
 
 The deployed interface includes ready-made questions, a free-text guideline
@@ -35,6 +67,27 @@ Answers are grounded in retrieved guideline passages and include the official
 source, exact PDF page, and a direct link to the government document.
 
 ![Grounded Streamlit answer with an official citation](docs/assets/streamlit-grounded-answer.png)
+
+### How to try it
+
+1. Open the live demo and choose a question from **Common guideline questions**.
+2. The selection fills the **Guideline question** box. You can edit the wording.
+3. Click **Search official guidelines** and wait for the result.
+4. Read the answer and its source title and PDF page references. Follow the
+   **Open official source** link to inspect the original document.
+5. Notice the request latency below the result: it measures how long that request
+   took, not the quality or certainty of the answer.
+
+In the first screenshot, the dropdown provides a starting point for users who do
+not know what the corpus covers. In the second, the answer and citation show how
+an explanation can be traced back to a document. The screenshots illustrate the
+interface; exact wording and retrieved pages can differ between requests.
+
+An insufficient-evidence message means the system could not find or validate
+enough support. A safety refusal means the question asks for something outside
+the assistant's permitted role. An operational error can indicate a connection,
+model, index, or API quota problem. These outcomes have different causes even
+though none displays a generated answer.
 
 ## 🎯 Project goal
 
@@ -97,17 +150,160 @@ Schema, output safety, lexical + semantic support, and citation-ID validation
 Answer claims + official URL + exact PDF page(s) + disclaimer
 ```
 
+## 🧩 Core concepts explained
+
+| Concept | Plain-language meaning | How this project uses it |
+| --- | --- | --- |
+| Large language model (LLM) | A model that generates text from the input it receives. Fluent text can still contain mistakes. | Gemini drafts explanations from the selected guideline passages. |
+| Corpus / knowledge base | The collection of documents the application is allowed to search. | Three curated MOHFW/NCVBDC guidelines, represented by 443 text chunks. |
+| Ingestion | Preparing source documents so software can search them. | Download approved PDFs, extract text, clean it, split it, and record source metadata. |
+| Token | A unit of text processed by a model; it can be a word, part of a word, or punctuation. | The chunker estimates token counts to keep passages and prompts bounded. |
+| Chunk and overlap | A chunk is a small passage; overlap repeats some text at a boundary to preserve context. | Target about 300 estimated tokens per chunk, with a 400-token maximum and roughly 50-token overlap. |
+| Metadata | Information describing a passage and where it came from. | Source ID, title, URL, pages, sections, date, and content hash help trace evidence. |
+| Embedding / vector | A numerical representation that helps compare text by meaning. | Gemini represents each chunk as 768 numbers and represents each query in the same space. |
+| Cosine similarity | A comparison of the directions of two vectors. | Helps rank passages whose embeddings are similar to the question's embedding. |
+| Index | A prepared data structure used for searching. | SQLite stores searchable text, source metadata, and embedding vectors. |
+| BM25 / lexical search | A word-based ranking method that considers term frequency, rarity, and document length. | Finds passages containing the user's terms or related word forms. |
+| Dense / semantic search | Search using embeddings rather than only matching words. | Helps find a passage when the question uses different wording. |
+| Hybrid search | Combining lexical and semantic search. | Retrieves candidates from both BM25 and Gemini embeddings. |
+| Reciprocal-rank fusion (RRF) | Combining result lists according to positions rather than raw scores. | Merges the two rankings before reranking. |
+| Cross-encoder reranker | A model that reads the question and a candidate passage together to score relevance. | Reorders the ten fused candidates using a local ONNX model. |
+| Grounding and citation | Grounding ties a claim to evidence; a citation tells the reader where to inspect that evidence. | Each generated claim must cite retrieved chunk IDs, which resolve to official sources and pages. |
+| Guardrail | A rule or check that limits what the system accepts or displays. | Input rules, relevance thresholds, output safety checks, and citation validation. |
+| Hallucination | A generated statement that is invented or unsupported by the available evidence. | The pipeline reduces this risk through retrieval and validation; it cannot eliminate it. |
+
+### Why use both search methods?
+
+Suppose a question uses “BP measurement” while a guideline says “blood pressure
+measurement.” Conservative abbreviation expansion helps normalize the query.
+BM25 can find matching terms, while embeddings can help with paraphrases. Neither
+method guarantees that a passage actually answers the question, so the fused
+candidates pass through a reranker before generation.
+
+The fusion rule is `1 / (60 + rank)` for each list in which a passage appears.
+For example, a passage ranked first by BM25 and third by dense search receives
+`1/61 + 1/63`, approximately `0.0323`. This is a ranking score, not a probability
+that the passage is correct.
+
+### Why retrieve before reranking?
+
+Chunk embeddings can be prepared in advance and reused. A cross-encoder must
+process each question–passage pair together, so it does more work at query time.
+This project first finds a small candidate set, then spends that extra computation
+on ten passages instead of the whole corpus.
+
+The reranker's raw scores are transformed into values between 0 and 1. The
+configured top-result threshold is `0.20`: below it, the system refuses for
+insufficient evidence. **A score of 0.80 does not mean an answer is 80% medically
+correct.** These are relevance scores, and the threshold has only been checked
+against a small project dataset.
+
+## 🔎 End-to-end walkthrough
+
+The project has two workflows: preparation runs when the corpus is built or
+updated; answering runs each time a user submits a question.
+
+### A. Prepare the searchable documents
+
+1. **Select official sources.** The source manifest lists approved PDF URLs,
+   editions, dates, and page inclusion rules. The app does not search the whole
+   internet for every question.
+2. **Download and verify.** The downloader checks the hostname and PDF response,
+   then records a SHA-256 hash. A hash is a fingerprint for detecting changed
+   bytes; it does not prove that the document is correct or current.
+3. **Extract and clean text.** `pdfplumber` reads text page by page. The pipeline
+   removes repeated headers/footers and flags pages needing image review. It does
+   not assume every scanned page can be read successfully.
+4. **Create chunks.** The chunker splits text into passages while preserving page
+   references. Some short chunks remain at natural boundaries; the corpus audit
+   reports these rather than silently hiding them.
+5. **Audit the corpus.** Checks cover chunk IDs, allowed page ranges, size limits,
+   and source consistency before indexing.
+6. **Embed and store.** Gemini creates chunk embeddings. SQLite stores these
+   vectors alongside text and metadata, and FTS5 provides the keyword index.
+   Cached vectors allow unchanged chunks to be reused during a rebuild.
+
+This is document indexing; it does not train or fine-tune Gemini. Updating a
+guideline requires reviewing the source and rebuilding the affected data.
+
+### B. Answer a guideline question
+
+Using “According to the dengue guideline, what warning signs are listed?” as a
+workflow example:
+
+1. **Check the input.** The safety gate checks whether the question is allowed.
+   Personal diagnosis, dosing, and emergency requests are refused before retrieval.
+2. **Normalize wording.** Text cleanup and known abbreviation expansion prepare
+   the search query without broadly inventing additional medical meaning.
+3. **Retrieve candidates.** BM25 returns up to 20 passages and dense search
+   returns up to 20. Source filters are available for exact approved source IDs.
+4. **Fuse and rerank.** RRF selects ten candidates, and the cross-encoder orders
+   them by relevance to the question. The confidence gate checks the top score.
+5. **Generate from context.** Up to five selected passages are supplied to Gemini
+   with instructions to use only that evidence and return structured claims.
+6. **Validate the answer.** Code checks the JSON structure, cited IDs, output
+   safety, lexical overlap, and—on the Streamlit and configured CLI paths—the
+   cross-encoder score between each claim and its cited text. Relevance is a
+   support heuristic, not a test of logical entailment.
+7. **Display or refuse.** Accepted claims receive source metadata from the index.
+   If validation fails, one bounded regeneration attempt is allowed; an answer
+   that still fails is blocked.
+
+### What does structured output mean?
+
+Instead of requesting one unrestricted paragraph, the application requests JSON,
+a format with named fields that Python can inspect. This **illustrative example**
+shows the shape only; its placeholder ID is not a real citation:
+
+```json
+{
+  "status": "answered",
+  "claims": [
+    {
+      "text": "A short statement supported by the retrieved passage.",
+      "chunk_ids": ["example-source:example-chunk"]
+    }
+  ]
+}
+```
+
+The model supplies a claim and an ID. The application looks up the ID in the
+retrieved evidence and obtains the official title, URL, and PDF pages itself.
+Unknown IDs are rejected. This protects citation metadata, but a real citation
+alone does not prove that the associated statement is supported.
+
 ## 🛠️ Technology
 
-- Python 3.12+
-- Streamlit
-- SQLite with FTS5/BM25
-- Google Gemini API through `google-genai`
-- `gemini-embedding-001` embeddings at 768 dimensions
-- `gemini-3.5-flash-lite` structured generation
-- FastEmbed + ONNX `ms-marco-MiniLM-L-6-v2` cross-encoder
-- `pdfplumber` for PDF text extraction
-- Python `unittest` for automated tests
+| Tool | Responsibility | Why it is used here |
+| --- | --- | --- |
+| Python 3.12+ | Connects ingestion, retrieval, generation, validation, and UI code. | One language keeps a student's first end-to-end project easier to follow. |
+| Streamlit | Builds the dropdown, text input, answer display, and citation links. | Provides a Python interface without requiring a separate frontend framework. |
+| SQLite + FTS5 | Stores text, vectors, metadata, and the BM25 index in one local database. | Fits a small corpus and avoids running a separate database service. Dense similarity is calculated in Python, not by a hosted vector database. |
+| `pdfplumber` | Extracts page-level PDF text. | Preserves page references needed for citations and corpus review. |
+| `requests` | Downloads the allowlisted guideline PDFs. | Supports the controlled HTTP download stage. |
+| `google-genai` | Calls Google's embedding and generation APIs. | Uses one SDK for both Gemini roles. An API key identifies and authorizes the application to the service. |
+| `gemini-embedding-001` | Generates 768-dimensional document and query vectors. | Enables semantic retrieval; it does not write the final answer. |
+| `gemini-3.5-flash-lite` | Generates structured answer claims from the selected passages. | The configured text-generation model supplies the explanation after retrieval. |
+| FastEmbed + ONNX Runtime | Runs `Xenova/ms-marco-MiniLM-L-6-v2` locally. | Adds cross-encoder reranking without an additional paid reranking API or a PyTorch runtime dependency. ONNX is a model format; ONNX Runtime executes the model. |
+| `python-dotenv` / Streamlit Secrets | Loads the Gemini key for local / hosted runs. | Keeps configuration separate from committed application code. |
+| Python `unittest` + Streamlit AppTest | Checks components and UI behavior. | Allows regressions to be detected with repeatable tests. |
+
+The model names above describe the repository's configuration. API availability
+and quotas depend on the Google project. The application is designed around
+free-tier usage, but a free-tier limit is not a guarantee of unlimited requests.
+
+### Where does computation happen?
+
+SQLite search, vector comparison, reranking, and validation run in the Python
+application—on your computer for a local run, or on the Streamlit host for the
+public app. Gemini API calls run remotely. Document text is sent for embeddings
+during index preparation; allowed query text is sent for query embeddings, and
+the question plus selected passages are sent for answer generation.
+
+The public repository includes the prepared index, so a visitor can try the app
+without downloading and embedding all PDFs again. The reranker model is fetched
+separately on first use and cached. The repository is organized into ordinary
+Python modules; no agent framework is required for this fixed sequence of steps.
 
 ## 🛡️ Safety design
 
@@ -116,7 +312,7 @@ The safety gate runs before retrieval or API access. It blocks:
 - first-person symptoms and requests for diagnosis;
 - personalized treatment or medication changes;
 - medication doses and dosing summaries;
-- uploaded or pasted personal medical records;
+- questions containing personal medical records (the UI does not offer uploads);
 - emergency/crisis requests; and
 - obvious questions outside the indexed corpus.
 
@@ -136,6 +332,8 @@ See [`docs/scope-and-safety.md`](docs/scope-and-safety.md) and
 Create a Google AI Studio API key, then clone the repository and run:
 
 ```powershell
+git clone https://github.com/cakhiltej9001-source/medical-guideline-assistant.git
+cd medical-guideline-assistant
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -158,6 +356,17 @@ python -m streamlit run streamlit_app.py
 
 Then open <http://localhost:8501>.
 
+These commands are for Windows PowerShell. They assume Git and Python are
+installed. A **virtual environment** (`.venv`) isolates this project's packages
+from your other Python projects; activation makes `python` use that environment.
+`requirements.txt` lists the dependency versions to install. If you already cloned
+the repository, start from its folder and skip the first two commands.
+
+`localhost` means your own computer. It is useful for development, but sharing
+that address does not give someone else access to your local app. The public
+Streamlit URL runs a hosted copy. An internet connection is needed for Gemini
+requests and for the first reranker download.
+
 ## 💬 Example questions
 
 - According to the dengue guideline, what warning signs are listed?
@@ -171,8 +380,8 @@ The same questions are available from the application's dropdown.
 
 ## 🔄 Rebuild the corpus and index
 
-The committed runtime index makes hosted startup deterministic. To reproduce it
-from the allowlisted sources:
+The committed runtime index avoids rebuilding the corpus on hosted startup. To
+reproduce it from the allowlisted sources:
 
 ```powershell
 python scripts/download_sources.py
@@ -219,7 +428,7 @@ python scripts/evaluate_retrieval.py
 python scripts/evaluate_retrieval.py --hybrid
 ```
 
-Current small smoke benchmarks:
+Recorded small smoke benchmarks (these are project checks, not clinical validation):
 
 | Evaluation | Result |
 | --- | ---: |
@@ -235,10 +444,53 @@ Current small smoke benchmarks:
 | Hybrid + reranker MRR@5 | 0.917 |
 | Hybrid gold-page coverage@5 | 0.806 |
 
+### What do these numbers mean?
+
+- **Automated tests** check specific expected behaviors, including validation,
+  error handling, and UI rendering. Passing tests does not cover every possible input.
+- **Safety accuracy** is the fraction of labeled examples classified as expected.
+  A 13/13 result describes those 13 examples, not all possible unsafe requests.
+- **Answerable Recall@5** is the evaluation script's name for **Hit Rate@5**:
+  the fraction of questions with at least one annotated relevant page represented
+  in the first five results. It does not mean all relevant evidence was retrieved.
+- **MRR@5** averages the reciprocal rank of the first relevant result: rank 1
+  contributes 1, rank 2 contributes 0.5, and no relevant result in the top five
+  contributes 0. Higher values mean useful evidence appears earlier.
+- **Gold-page coverage@5** measures how many annotated relevant pages appear in
+  the top five results, divided by the annotated pages for each question, then
+  averaged across questions. This captures missing evidence that hit rate can hide.
+- **Confidence-gate accuracy** checks whether the relevance threshold accepts or
+  rejects five labeled answerable/unanswerable questions as expected.
+- **Citation/grounding validation** checks five constructed cases using fixed
+  support scores. It tests validator acceptance/rejection behavior, not the real
+  model's semantic faithfulness or medical accuracy.
+
+For example, retrieving one of four relevant pages counts as a hit, but only
+25% page coverage for that question. This is why more than one metric is needed.
+The hybrid retrieval evaluation calls Gemini; local reranker evaluations can
+also need internet access on the first run to download the model.
+
 The evaluation sets are deliberately small and do not justify production or
 clinical-performance claims. A real deployment needs substantially larger held-out
 sets for retrieval recall, refusal accuracy, claim faithfulness, citation
 correctness, latency percentiles, and API failure rates.
+
+## 🔧 Troubleshooting and operational behavior
+
+| What you see | What it means / what to check |
+| --- | --- |
+| Missing API key or authentication failure | Set `GEMINI_API_KEY` in local `.env` or hosted Streamlit Secrets. Never paste the key into a question, screenshot, or GitHub issue. |
+| Semantic search unavailable; keyword fallback used | Query embedding retrieval failed. BM25 can still retrieve candidates, but reranking, generation, and validation must still succeed. |
+| Insufficient evidence | The corpus or retrieved passages do not meet the relevance gate. Try a general question about an indexed topic; do not lower safety thresholds just to force an answer. |
+| Answer blocked by validation | At least one output check failed. Developers should inspect schema, citation IDs, support scores, and safety decisions with non-sensitive test inputs. |
+| First request takes longer | The local reranker may be downloading/loading, and the hosted app may be starting up. Later requests can reuse cached resources. |
+| Quota or rate-limit message | Wait before retrying and check the provider's quota. The app also limits each session to five requests per 60 seconds; this is not a global abuse-control system. |
+
+Latency is the time spent handling a request. This project limits context size,
+caches reusable resources, and bounds retries to control latency and API use.
+Repeated retries still consume time and can consume quota. A production system
+should track slow requests, failures, and usage without logging personal health
+information or secrets.
 
 ## ☁️ Deploy on Streamlit Community Cloud
 
@@ -274,6 +526,27 @@ src/medical_guideline_assistant/
 tests/                    Automated unit and render-level tests
 streamlit_app.py          Streamlit entrypoint
 ```
+
+### A beginner-friendly code reading order
+
+1. Start with [`streamlit_app.py`](streamlit_app.py) to connect the visible
+   dropdown, form, and result display to Python code.
+2. Read [`answering.py`](src/medical_guideline_assistant/answering.py) and
+   [`pipeline.py`](src/medical_guideline_assistant/pipeline.py) to follow how the
+   stages are connected and how failures stop an answer.
+3. Explore [`index.py`](src/medical_guideline_assistant/retrieval/index.py) and
+   [`reranker.py`](src/medical_guideline_assistant/retrieval/reranker.py) to see
+   candidate retrieval and pairwise relevance scoring.
+4. Read [`grounding.py`](src/medical_guideline_assistant/generation/grounding.py)
+   to understand why model output is checked before display.
+5. Compare the settings in [`configs/`](configs/) with the cases in
+   [`eval/`](eval/) and the checks in [`tests/`](tests/).
+
+This separation is **modular design**: UI code handles interaction, retrieval
+code finds evidence, generation code drafts and validates claims, and ingestion
+code prepares documents. Smaller responsibilities make changes easier to test
+and bugs easier to locate. Configuration files hold tunable settings separately
+from the logic that uses them.
 
 ## 🎤 Common interview questions and sample answers
 
@@ -395,7 +668,8 @@ formal clinical safety and regulatory review.
 **17. What is the biggest limitation?**
 
 The corpus contains only three guidelines, one of which is marked as a draft,
-and lexical evidence overlap is not the same as semantic entailment. The system
+and neither lexical overlap nor cross-encoder relevance proves semantic entailment
+(that the evidence actually implies the claim). The system
 therefore refuses aggressively and must not be used for diagnosis or clinical
 decision-making.
 
