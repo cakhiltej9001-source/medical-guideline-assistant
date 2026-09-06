@@ -24,6 +24,32 @@ patient-data interpretation, and emergency requests.
 
 [Open the Medical Guideline Assistant on Streamlit Community Cloud](https://medical-guideline-assistant-luowhfprn5urrtnhgrgzq7.streamlit.app/)
 
+### ✨ Project at a glance
+
+| | |
+| --- | --- |
+| **Use case** | Educational questions about indexed official medical guidelines |
+| **Knowledge base** | 3 MOHFW/NCVBDC PDFs · 443 audited chunks |
+| **Retrieval** | BM25 + Gemini embeddings + reciprocal-rank fusion |
+| **Precision layer** | Local ONNX cross-encoder reranker with a confidence gate |
+| **Generation** | Gemini structured claims using up to 5 retrieved passages |
+| **Trust features** | Page-level citations, source allowlist, input/output guardrails, safe refusals |
+| **Interface** | Streamlit web application plus command-line scripts |
+| **Quality checks** | 66 automated tests and small retrieval, confidence, grounding, and safety evaluations |
+
+### 🌟 What makes this project interesting?
+
+- 🔎 **Evidence before answers:** every allowed request searches the curated
+  corpus before the model generates text.
+- 🔗 **Inspectable citations:** accepted claims point to an official source and
+  exact PDF page rather than a model-created reference.
+- 🧠 **Three-stage relevance:** hybrid retrieval improves recall, reranking
+  improves ordering, and a confidence threshold can stop weak matches.
+- 🛡️ **Fail-closed safety:** unsafe, unsupported, or invalid outputs become a
+  controlled refusal instead of being shown as an answer.
+- 💸 **Student-friendly architecture:** SQLite, local reranking, Streamlit, and
+  bounded Gemini calls keep the system understandable and relatively lightweight.
+
 ## 👋 Start here if you are new to AI projects
 
 Imagine a reader looking for one explanation inside several long government
@@ -49,12 +75,14 @@ end-to-end walkthrough, and then explore the code using the file guide.
 ### 🧭 Guide to this README
 
 - [Try the app and understand the screenshots](#-working-application)
+- [See the visual architecture](#-architecture)
 - [Learn the core concepts](#-core-concepts-explained)
 - [Follow the complete workflow](#-end-to-end-walkthrough)
 - [Understand the technology choices](#-technology)
 - [Run it locally](#-local-setup)
 - [Understand the evaluation results](#-tests-and-evaluation)
 - [Troubleshoot common issues](#-common-issues-and-resolutions)
+- [Review limitations and next steps](#-known-limitations)
 - [Prepare for interviews](#-common-interview-questions-and-sample-answers)
 
 ## 📸 Working application
@@ -101,6 +129,22 @@ The project demonstrates how to:
 - refuse unsafe or insufficiently supported requests; and
 - evaluate retrieval quality and safety behavior.
 
+### General chatbot versus this assistant
+
+| General-purpose chatbot | Medical Guideline Assistant |
+| --- | --- |
+| May answer from broad model knowledge | Answers only from the indexed corpus |
+| Often provides prose without traceable evidence | Requires claim-level chunk IDs and resolves page citations |
+| May attempt almost any question | Refuses personalized, emergency, out-of-scope, and low-confidence requests |
+| Knowledge updates depend on the model/provider | Documents can be versioned and re-indexed without fine-tuning |
+
+### 🎓 Learning outcomes
+
+By studying this repository, a beginner can learn how to curate documents,
+extract and chunk PDF text, create embeddings, combine keyword and semantic
+search, rerank candidates, prompt for structured output, validate citations,
+design safety gates, evaluate a RAG pipeline, and deploy a Python application.
+
 ## 📚 Indexed topics
 
 The current corpus contains 443 audited chunks from three public guidelines:
@@ -120,36 +164,28 @@ external MOHFW links are retrieved without accepting arbitrary internet content.
 
 ## 🧠 Architecture
 
-```text
-User question
-    |
-    v
-Pre-retrieval safety gate ---- unsafe/personal request ---> Safe refusal
-    |
-    v
-Query normalization and conservative abbreviation expansion
-    |
-    v
-BM25 retrieval + Gemini dense retrieval
-    |                 |
-    |                 +--- API failure ---> Local BM25 fallback
-    v
-Reciprocal-rank fusion and top evidence chunks
-    |
-    v
-Local ONNX cross-encoder reranking
-    |
-    +--- top score < 0.20 / model unavailable ---> Insufficient-evidence refusal
-    v
-Gemini structured claim generation
-    |
-    v
-Schema, output safety, lexical + semantic support, and citation-ID validation
-    |
-    +--- validation failure ---> Safe refusal
-    v
-Answer claims + official URL + exact PDF page(s) + disclaimer
+```mermaid
+flowchart TD
+    A[User question] --> B{Input safe and in scope?}
+    B -- No --> R1[Safe refusal]
+    B -- Yes --> C[Normalize query]
+    C --> D1[BM25 keyword search]
+    C --> D2[Gemini semantic search]
+    D2 -. API unavailable .-> D1
+    D1 --> E[Reciprocal-rank fusion]
+    D2 --> E
+    E --> F[Local cross-encoder reranker]
+    F --> G{Top score at least 0.20?}
+    G -- No --> R2[Insufficient-evidence refusal]
+    G -- Yes --> H[Gemini structured generation]
+    H --> I{Schema, safety, support and citations valid?}
+    I -- No --> R3[Bounded retry, then refusal]
+    I -- Yes --> J[Grounded answer with official pages]
 ```
+
+Solid arrows show the normal path. The dotted arrow shows the local BM25
+fallback when semantic query embedding is unavailable. Every refusal path is an
+intentional system outcome, not necessarily an application failure.
 
 ## 🧩 Core concepts explained
 
@@ -739,6 +775,24 @@ decision-making.
 - Session rate limiting is not sufficient for an anonymous public application.
 - This project must not be used for diagnosis, treatment, emergencies, or clinical
   decision-making.
+
+## 🗺️ Future roadmap
+
+These are proposed improvements, not features claimed by the current version:
+
+- [ ] Expand the versioned corpus with additional reviewed government guidelines.
+- [ ] Add scheduled source-change detection and human-approved re-indexing.
+- [ ] Build a larger held-out evaluation set with expert-reviewed relevance and
+  claim-support labels.
+- [ ] Compare the relevance reranker with a medical-domain reranker and a true
+  entailment/claim-verification model.
+- [ ] Add shared rate limits, privacy-safe monitoring, audit events, and latency
+  dashboards for a multi-user deployment.
+- [ ] Improve scanned-page and table handling through a reviewed OCR pipeline.
+- [ ] Add accessibility and usability testing with representative users.
+
+The roadmap is deliberately separated from implemented features so readers can
+distinguish the current evidence-backed system from future ambitions.
 
 ## 📖 Documentation
 
