@@ -1,0 +1,113 @@
+{
+  "timestamp_utc": "2026-09-19T02:32:28.588313+00:00",
+  "mode": "baseline",
+  "generation_model": "gemini-3.5-flash-lite",
+  "embedding_model": "gemini-embedding-001",
+  "cases": [
+    {
+      "case_id": "dengue",
+      "expected": "answered",
+      "actual": "output_blocked",
+      "passed": false,
+      "confidence": {
+        "level": "not_assessed",
+        "score": null,
+        "reason": "No validated answer was produced."
+      },
+      "claim_confidence": [],
+      "hyde_status": "disabled",
+      "correction_status": "disabled",
+      "removed_chunks": 0,
+      "initial_top_score": 0.9855520795688628,
+      "final_top_score": 0.9855520795688628,
+      "diagnostic": "GroundingValidationError: Claim 3 has insufficient semantic evidence support.",
+      "latency_seconds": 14.77
+    },
+    {
+      "case_id": "hypertension",
+      "expected": "answered",
+      "actual": "answered",
+      "passed": true,
+      "confidence": {
+        "level": "moderate",
+        "score": 0.596739328395159,
+        "reason": "Minimum cited-evidence relevance and claim-support score; an uncalibrated heuristic, not medical certainty."
+      },
+      "claim_confidence": [
+        "high",
+        "high",
+        "high",
+        "moderate"
+      ],
+      "hyde_status": "disabled",
+      "correction_status": "disabled",
+      "removed_chunks": 0,
+      "initial_top_score": 0.9963444579173859,
+      "final_top_score": 0.9963444579173859,
+      "diagnostic": null,
+      "latency_seconds": 8.16
+    },
+    {
+      "case_id": "diabetic_foot",
+      "expected": "answered",
+      "actual": "answered",
+      "passed": true,
+      "confidence": {
+        "level": "high",
+        "score": 0.998325779232469,
+        "reason": "Minimum cited-evidence relevance and claim-support score; an uncalibrated heuristic, not medical certainty."
+      },
+      "claim_confidence": [
+        "high",
+        "high"
+      ],
+      "hyde_status": "disabled",
+      "correction_status": "disabled",
+      "removed_chunks": 0,
+      "initial_top_score": 0.998325779232469,
+      "final_top_score": 0.998325779232469,
+      "diagnostic": null,
+      "latency_seconds": 14.66
+    },
+    {
+      "case_id": "unsupported",
+      "expected": "insufficient_evidence",
+      "actual": "insufficient_evidence",
+      "passed": true,
+      "confidence": {
+        "level": "low",
+        "score": null,
+        "reason": "Insufficient validated evidence; no answer confidence is assigned."
+      },
+      "claim_confidence": [],
+      "hyde_status": "disabled",
+      "correction_status": "disabled",
+      "removed_chunks": 0,
+      "initial_top_score": 0.03781295826085502,
+      "final_top_score": 0.03781295826085502,
+      "diagnostic": null,
+      "latency_seconds": 12.19
+    },
+    {
+      "case_id": "personal",
+      "expected": "refused",
+      "actual": "refused",
+      "passed": true,
+      "confidence": {
+        "level": "not_assessed",
+        "score": null,
+        "reason": "No validated answer was produced."
+      },
+      "claim_confidence": [],
+      "hyde_status": "disabled",
+      "correction_status": "disabled",
+      "removed_chunks": 0,
+      "initial_top_score": null,
+      "final_top_score": null,
+      "diagnostic": null,
+      "latency_seconds": 0.0
+    }
+  ],
+  "passed": false,
+  "limitation": "Five smoke cases; status and pipeline checks, not a measurement of medical accuracy or entailment."
+}

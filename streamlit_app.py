@@ -138,6 +138,9 @@ def execute_query(query: str) -> AnswerOutcome:
 
 
 def render_answer(outcome: AnswerOutcome, latency_seconds: float) -> None:
+    confidence = outcome.confidence
+    st.caption(f"Evidence confidence: {confidence.level.replace('_', ' ').title()}")
+    st.caption(confidence.reason)
     if outcome.retrieval.retrieval_mode == "lexical_fallback":
         st.info(
             "Semantic search was temporarily unavailable, so this response used "
@@ -148,6 +151,8 @@ def render_answer(outcome: AnswerOutcome, latency_seconds: float) -> None:
         seen_citations: set[tuple[str, str, tuple[int, ...]]] = set()
         for number, claim in enumerate(outcome.answer.claims, start=1):
             st.write(f"{number}. {claim.text}")
+            if claim.confidence:
+                st.caption(f"Claim evidence confidence: {claim.confidence.level.replace('_', ' ').title()}")
             for citation in claim.citations:
                 key = (citation.title, citation.source_url, tuple(citation.pages))
                 if key in seen_citations:
@@ -170,6 +175,10 @@ def render_answer(outcome: AnswerOutcome, latency_seconds: float) -> None:
             "Try a narrower question about the indexed guidelines."
         )
     st.caption(f"Request latency: {latency_seconds:.2f} seconds")
+    with st.expander("How this answer was checked"):
+        st.write({"HyDE": outcome.retrieval.hyde_status,
+                  "Corrective retrieval": outcome.retrieval.correction_status,
+                  "Weak passages removed": outcome.retrieval.removed_chunks})
 
 
 def apply_sample_question() -> None:
@@ -238,3 +247,4 @@ if submitted:
                     "The request failed safely. Check the local index, API key, "
                     "internet connection, and API quota, then try again."
                 )
+                st.caption("Evidence confidence: Not assessed — no validated answer was produced.")

@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
+import math
 from typing import Any, Protocol
 
 from ..retrieval.index import SearchResult
+from ..confidence import EvidenceConfidence, confidence_from_scores
 
 
 ANSWER_SCHEMA: dict[str, Any] = {
@@ -43,7 +45,14 @@ emergency instructions. Return `insufficient_evidence` with no claims when the
 chunks do not directly support an answer. For `answered`, express each factual
 statement as a separate claim and attach every chunk ID that directly supports it.
 Write claims as neutral, third-person descriptions and never address the reader as
-"you". Never invent or alter a chunk ID."""
+"you". Never invent or alter a chunk ID.
+Answer the exact question, preserve qualifiers and distinctions, and avoid unrelated
+details. Use 1 to 6 short atomic claims where possible (never more than 12; each
+under 600 characters). Do not turn a document description into a recommendation.
+If passages conflict or lack the requested information, abstain rather than
+reconcile them using prior knowledge. Never report your own confidence percentage.
+Before returning JSON, check each claim against its cited passage and remove any
+unsupported addition. Output only the requested JSON, without reasoning or markdown."""
 
 WORD_PATTERN = re.compile(r"[a-z0-9]+", flags=re.IGNORECASE)
 TOKEN_STOPWORDS = frozenset(
@@ -135,6 +144,7 @@ class Citation:
 class GroundedClaim:
     text: str
     citations: list[Citation]
+    confidence: EvidenceConfidence | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +165,7 @@ def build_grounded_prompt(query: str, results: list[SearchResult]) -> str:
                 [
                     f"<chunk id={json.dumps(result.chunk_id)}>",
                     f"title: {result.title}",
+                    f"source_id: {result.source_id}",
                     f"pages: {result.pages}",
                     result.text,
                     "</chunk>",
@@ -233,6 +244,8 @@ def validate_grounded_payload(
             )
         if not isinstance(chunk_ids, list) or not chunk_ids:
             raise GroundingValidationError(f"Claim {index} has no citations.")
+        if any(not isinstance(chunk_id, str) for chunk_id in chunk_ids):
+            raise GroundingValidationError(f"Claim {index} has invalid citation IDs.")
         if len(chunk_ids) != len(set(chunk_ids)):
             raise GroundingValidationError(f"Claim {index} repeats citation IDs.")
         unknown = [chunk_id for chunk_id in chunk_ids if chunk_id not in evidence_by_id]
@@ -245,6 +258,7 @@ def validate_grounded_payload(
             raise GroundingValidationError(
                 f"Claim {index} has insufficient lexical evidence overlap."
             )
+        support_score = None
         if support_scorer is not None:
             try:
                 support_score = support_scorer.score_pair(text, combined_evidence)
@@ -252,7 +266,7 @@ def validate_grounded_payload(
                 raise GroundingValidationError(
                     f"Claim {index} semantic support scoring failed."
                 ) from exc
-            if support_score < minimum_claim_support_score:
+            if not isinstance(support_score, (int, float)) or not math.isfinite(support_score) or not 0 <= support_score <= 1 or support_score < minimum_claim_support_score:
                 raise GroundingValidationError(
                     f"Claim {index} has insufficient semantic evidence support."
                 )
@@ -266,6 +280,7 @@ def validate_grounded_payload(
             )
             for result in cited_results
         ]
-        claims.append(GroundedClaim(text=text.strip(), citations=citations))
+        confidence = confidence_from_scores([support_score, *[result.rerank_score for result in cited_results]])
+        claims.append(GroundedClaim(text=text.strip(), citations=citations, confidence=confidence))
 
     return GroundedAnswer(status="answered", claims=claims, disclaimer=disclaimer)

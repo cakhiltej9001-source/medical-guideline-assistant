@@ -150,6 +150,21 @@ class RetrievalIndexTests(unittest.TestCase):
         self.assertEqual(rebuilt["embedding_cache_hits"], 3)
         self.assertEqual(second_provider.document_calls, 0)
 
+    def test_hypothetical_vector_adds_an_independent_fusion_signal(self) -> None:
+        provider = FakeEmbeddingProvider()
+        build_index(self.database, RECORDS, CONFIG, provider)
+        baseline = search_index(self.database, "unrelated topic", CONFIG, provider)
+        augmented = search_index(
+            self.database,
+            "unrelated topic",
+            CONFIG,
+            provider,
+            hypothetical_vector=[1.0, 0.0, 0.0],
+        )
+        baseline_scores = {result.chunk_id: result.rrf_score for result in baseline}
+        augmented_scores = {result.chunk_id: result.rrf_score for result in augmented}
+        self.assertGreater(augmented_scores["dengue:1"], baseline_scores["dengue:1"])
+
     def test_query_length_guardrail(self) -> None:
         build_index(self.database, RECORDS, CONFIG)
         with self.assertRaises(RetrievalIndexError):

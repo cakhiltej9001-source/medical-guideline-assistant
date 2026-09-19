@@ -404,6 +404,7 @@ def search_index(
     config: RetrievalConfig,
     embedding_provider: EmbeddingProvider | None = None,
     source_ids: tuple[str, ...] | None = None,
+    hypothetical_vector: list[float] | None = None,
 ) -> list[SearchResult]:
     """Retrieve BM25 and dense candidates, then fuse their ranks."""
     normalized_query = _validate_query(query)
@@ -435,7 +436,12 @@ def search_index(
             chunk_id: (rank, score)
             for rank, (chunk_id, score) in enumerate(dense, start=1)
         }
-        candidate_ids = set(lexical_map).union(dense_map)
+        hypothetical = (
+            _dense_candidates(connection, hypothetical_vector, config.search.dense_candidates, source_ids)
+            if hypothetical_vector is not None else []
+        )
+        hypothetical_map = {chunk_id: rank for rank, (chunk_id, _) in enumerate(hypothetical, start=1)}
+        candidate_ids = set(lexical_map).union(dense_map, hypothetical_map)
         fused = []
         for chunk_id in candidate_ids:
             score = 0.0
@@ -443,6 +449,8 @@ def search_index(
                 score += 1 / (config.search.rrf_constant + lexical_map[chunk_id][0])
             if chunk_id in dense_map:
                 score += 1 / (config.search.rrf_constant + dense_map[chunk_id][0])
+            if chunk_id in hypothetical_map:
+                score += 1 / (config.search.rrf_constant + hypothetical_map[chunk_id])
             fused.append((chunk_id, score))
         fused.sort(key=lambda item: (-item[1], item[0]))
 

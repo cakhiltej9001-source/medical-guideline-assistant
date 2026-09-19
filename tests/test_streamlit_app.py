@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class StreamlitAppTests(unittest.TestCase):
     def test_initial_page_renders_without_exceptions(self) -> None:
-        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=30)
+        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=90)
 
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(app.title[0].value, "Medical Guideline Assistant")
@@ -24,9 +24,9 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertEqual(app.button[0].label, "Search official guidelines")
 
     def test_sample_question_populates_editable_search_box(self) -> None:
-        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=30)
+        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=90)
         app.selectbox[0].select("Dengue — warning signs")
-        app.run(timeout=30)
+        app.run(timeout=90)
 
         self.assertEqual(
             app.text_input[0].value,
@@ -34,15 +34,21 @@ class StreamlitAppTests(unittest.TestCase):
         )
 
     def test_personal_symptom_request_renders_refusal(self) -> None:
-        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=30)
+        app = AppTest.from_file(PROJECT_ROOT / "streamlit_app.py").run(timeout=90)
         app.text_input[0].set_value("i am having fever, help me")
         app.button[0].click()
-        app.run(timeout=30)
+        app.run(timeout=90)
 
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(len(app.error), 0)
         self.assertTrue(
             any("cannot diagnose" in warning.value for warning in app.warning)
+        )
+        self.assertTrue(
+            any(
+                "Evidence confidence: Not Assessed" in caption.value
+                for caption in app.caption
+            )
         )
 
 

@@ -39,12 +39,21 @@ class RerankingConfig:
 
 
 @dataclass(frozen=True)
+class AugmentationConfig:
+    hyde_enabled: bool = False
+    crag_enabled: bool = False
+    correction_threshold: float = 0.65
+    maximum_hypothesis_chars: int = 1200
+
+
+@dataclass(frozen=True)
 class RetrievalConfig:
     retrieval_version: int
     database_path: str
     embedding: EmbeddingConfig
     search: SearchConfig
     reranking: RerankingConfig = RerankingConfig()
+    augmentation: AugmentationConfig = AugmentationConfig()
 
     @classmethod
     def from_path(cls, path: Path) -> "RetrievalConfig":
@@ -59,6 +68,7 @@ class RetrievalConfig:
                 embedding=embedding,
                 search=search,
                 reranking=reranking,
+                augmentation=AugmentationConfig(**raw.get("augmentation", {})),
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise RetrievalConfigError(f"Could not load retrieval config: {exc}") from exc
@@ -66,6 +76,14 @@ class RetrievalConfig:
         return config
 
     def validate(self) -> None:
+        if not isinstance(self.augmentation.hyde_enabled, bool) or not isinstance(self.augmentation.crag_enabled, bool):
+            raise RetrievalConfigError("Augmentation switches must be booleans.")
+        if not 200 <= self.augmentation.maximum_hypothesis_chars <= 2000:
+            raise RetrievalConfigError("HyDE length must be between 200 and 2000 characters.")
+        if not self.reranking.minimum_top_score <= self.augmentation.correction_threshold <= 1:
+            raise RetrievalConfigError("Correction threshold must be between the refusal threshold and 1.")
+        if self.augmentation.crag_enabled and not self.reranking.enabled:
+            raise RetrievalConfigError("CRAG requires cross-encoder reranking.")
         if self.embedding.provider != "gemini":
             raise RetrievalConfigError("Only the gemini embedding provider is configured.")
         if not self.embedding.model.startswith("gemini-embedding-"):

@@ -16,6 +16,12 @@
     "final_results": 10,
     "rrf_constant": 60
   },
+  "augmentation": {
+    "hyde_enabled": true,
+    "crag_enabled": true,
+    "correction_threshold": 0.65,
+    "maximum_hypothesis_chars": 1200
+  },
   "reranking": {
     "enabled": true,
     "model": "Xenova/ms-marco-MiniLM-L-6-v2",

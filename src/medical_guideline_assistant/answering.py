@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .generation.config import GenerationConfig
+from .confidence import EvidenceConfidence, confidence_from_scores
 from .generation.gemini import GenerationError, GroundedGenerator
 from .generation.grounding import (
     GroundedAnswer,
@@ -16,7 +17,7 @@ from .generation.grounding import (
 from .pipeline import RetrievalOutcome, retrieve_safely
 from .retrieval.config import RetrievalConfig
 from .retrieval.embeddings import EmbeddingProvider
-from .retrieval.reranker import RerankingProvider
+from .retrieval.reranker import CrossEncoderReranker, RerankingProvider
 from .safety.guardrails import OUT_OF_SCOPE_REFUSAL, evaluate_input
 
 
@@ -28,6 +29,14 @@ class AnswerOutcome:
     retrieval: RetrievalOutcome
     diagnostic: str | None = None
 
+    @property
+    def confidence(self) -> EvidenceConfidence:
+        if self.status == "answered" and self.answer:
+            return confidence_from_scores([claim.confidence.score if claim.confidence else None for claim in self.answer.claims])
+        if self.status == "insufficient_evidence":
+            return EvidenceConfidence("low", None, "Insufficient validated evidence; no answer confidence is assigned.")
+        return EvidenceConfidence("not_assessed", None, "No validated answer was produced.")
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status,
@@ -35,6 +44,7 @@ class AnswerOutcome:
             "answer": asdict(self.answer) if self.answer else None,
             "retrieval": self.retrieval.to_dict(),
             "diagnostic": self.diagnostic,
+            "confidence": asdict(self.confidence),
         }
 
 
@@ -71,12 +81,15 @@ def answer_query(
     preflight = preflight_query(query)
     if preflight is not None:
         return preflight
+    if reranker is None and retrieval_config.reranking.enabled:
+        reranker = CrossEncoderReranker(retrieval_config.reranking)
     retrieval = retrieve_safely(
         query=query,
         database_path=database_path,
         config=retrieval_config,
         embedding_provider=embedding_provider,
         reranker=reranker,
+        retrieval_assistant=generator if hasattr(generator, "hypothesize") and hasattr(generator, "rewrite") else None,
     )
     if retrieval.status != "evidence_retrieved":
         return AnswerOutcome(
@@ -90,7 +103,8 @@ def answer_query(
     try:
         validation_error: GroundingValidationError | None = None
         for validation_attempt in range(generation_config.maximum_validation_attempts):
-            payload = generator.generate(
+            generate = generator.repair if validation_attempt > 0 and hasattr(generator, "repair") else generator.generate
+            payload = generate(
                 retrieval.safety.normalized_query,
                 evidence,
             )

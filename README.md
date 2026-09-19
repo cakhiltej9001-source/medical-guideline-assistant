@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Google-Gemini%20API-8E75B2?logo=googlegemini&logoColor=white)
 ![RAG](https://img.shields.io/badge/Architecture-Hybrid%20RAG-0A7EA4)
-![Tests](https://img.shields.io/badge/Tests-66%20passing-2EA44F)
+![Tests](https://img.shields.io/badge/Tests-83%20passing-2EA44F)
 ![Safety](https://img.shields.io/badge/Safety%20evals-19%2F19-2EA44F?logo=checkmarx&logoColor=white)
 
 > 🩺 **Trusted guidelines in. Grounded answers out.**
@@ -32,10 +32,12 @@ patient-data interpretation, and emergency requests.
 | **Knowledge base** | 3 MOHFW/NCVBDC PDFs · 443 audited chunks |
 | **Retrieval** | BM25 + Gemini embeddings + reciprocal-rank fusion |
 | **Precision layer** | Local ONNX cross-encoder reranker with a confidence gate |
+| **Advanced retrieval** | HyDE search plus one bounded, corpus-only CRAG correction |
 | **Generation** | Gemini structured claims using up to 5 retrieved passages |
 | **Trust features** | Page-level citations, source allowlist, input/output guardrails, safe refusals |
+| **Confidence display** | Overall and per-claim evidence-strength labels computed by the application |
 | **Interface** | Streamlit web application plus command-line scripts |
-| **Quality checks** | 66 automated tests and small retrieval, confidence, grounding, and safety evaluations |
+| **Quality checks** | 83 automated tests and small retrieval, confidence, grounding, and safety evaluations |
 
 ### 🌟 What makes this project interesting?
 
@@ -76,6 +78,7 @@ end-to-end walkthrough, and then explore the code using the file guide.
 
 - [Try the app and understand the screenshots](#-working-application)
 - [See the visual architecture](#-architecture)
+- [Understand HyDE, CRAG, and confidence](#-advanced-rag-and-confidence)
 - [Learn the core concepts](#-core-concepts-explained)
 - [Follow the complete workflow](#-end-to-end-walkthrough)
 - [Understand the technology choices](#-technology)
@@ -169,23 +172,54 @@ flowchart TD
     A[User question] --> B{Input safe and in scope?}
     B -- No --> R1[Safe refusal]
     B -- Yes --> C[Normalize query]
+    C --> HY[HyDE hypothetical passage embedding]
     C --> D1[BM25 keyword search]
     C --> D2[Gemini semantic search]
+    HY --> E
     D2 -. API unavailable .-> D1
     D1 --> E[Reciprocal-rank fusion]
     D2 --> E
     E --> F[Local cross-encoder reranker]
-    F --> G{Top score at least 0.20?}
+    F --> CR{Top score below 0.65?}
+    CR -- Yes --> FIX[One corpus-only rewrite and broader search]
+    FIX --> RR[Rerank against original question]
+    CR -- No --> FILTER[Remove passages below 0.20]
+    RR --> FILTER
+    FILTER --> G{Acceptable evidence remains?}
     G -- No --> R2[Insufficient-evidence refusal]
     G -- Yes --> H[Gemini structured generation]
     H --> I{Schema, safety, support and citations valid?}
     I -- No --> R3[Bounded retry, then refusal]
-    I -- Yes --> J[Grounded answer with official pages]
+    I -- Yes --> J[Grounded answer with official pages and evidence confidence]
 ```
 
 Solid arrows show the normal path. The dotted arrow shows the local BM25
 fallback when semantic query embedding is unavailable. Every refusal path is an
 intentional system outcome, not necessarily an application failure.
+
+## 🧪 Advanced RAG and confidence
+
+**HyDE** creates a short hypothetical passage and embeds it to find real guideline
+chunks. It is a search aid only: the hypothetical text is never cited or used as
+answer evidence. Original-query keyword and semantic search remain active.
+
+**CRAG** evaluates retrieval and, for weak results, makes one conservative query
+rewrite and broader search inside the approved corpus. New results are checked
+against the original question, merged, and filtered. This corpus-only adaptation
+does not search arbitrary websites and still refuses when evidence is insufficient.
+
+**Refined prompts** ask for short supported claims and preserve qualifiers. If
+validation fails, a separate repair prompt is used for the bounded second draft.
+
+**Confidence labels** appear on every response and each accepted claim. High
+means the weakest relevance/support score is at least 0.80; Moderate is 0.50-0.79;
+Low is below 0.50. Insufficient-evidence responses show Low without a numeric
+answer score; safety refusals and failures show Not assessed. These are heuristic
+evidence-strength bands, not probabilities of medical correctness.
+
+Both retrieval features are configurable and add API calls and latency. Read the
+[advanced RAG implementation guide](docs/advanced-rag.md) for the rules,
+limitations, cost tradeoffs, and comparison commands.
 
 ## 🧩 Core concepts explained
 
@@ -272,17 +306,21 @@ workflow example:
    Personal diagnosis, dosing, and emergency requests are refused before retrieval.
 2. **Normalize wording.** Text cleanup and known abbreviation expansion prepare
    the search query without broadly inventing additional medical meaning.
-3. **Retrieve candidates.** BM25 returns up to 20 passages and dense search
-   returns up to 20. Source filters are available for exact approved source IDs.
-4. **Fuse and rerank.** RRF selects ten candidates, and the cross-encoder orders
-   them by relevance to the question. The confidence gate checks the top score.
-5. **Generate from context.** Up to five selected passages are supplied to Gemini
+3. **Retrieve candidates.** BM25 and dense search use the original question;
+   HyDE adds a third dense ranking from a bounded hypothetical passage. Source
+   filters still restrict results to exact approved source IDs.
+4. **Fuse, rerank, and correct.** RRF selects candidates and the cross-encoder
+   scores them against the original question. A weak top result triggers one
+   corpus-only rewrite and broader search. Passages below the refusal threshold
+   are removed.
+5. **Generate from context.** Up to five real indexed passages are supplied to Gemini
    with instructions to use only that evidence and return structured claims.
 6. **Validate the answer.** Code checks the JSON structure, cited IDs, output
    safety, lexical overlap, and—on the Streamlit and configured CLI paths—the
    cross-encoder score between each claim and its cited text. Relevance is a
    support heuristic, not a test of logical entailment.
-7. **Display or refuse.** Accepted claims receive source metadata from the index.
+7. **Display or refuse.** Accepted claims receive source metadata and application-
+   computed evidence-confidence labels. Every response shows a confidence state.
    If validation fails, one bounded regeneration attempt is allowed; an answer
    that still fails is blocked.
 
@@ -463,13 +501,16 @@ python scripts/evaluate_grounding.py
 python scripts/evaluate_confidence.py
 python scripts/evaluate_retrieval.py
 python scripts/evaluate_retrieval.py --hybrid
+python scripts/evaluate_advanced_rag.py --output docs/advanced-rag-smoke.json
 ```
 
 Recorded small smoke benchmarks (these are project checks, not clinical validation):
 
 | Evaluation | Result |
 | --- | ---: |
-| Automated tests | 66 passing |
+| Automated tests | 83 passing |
+| Baseline live smoke cases | 4/5 expected outcomes (one safely blocked draft) |
+| Advanced RAG live smoke cases | 5/5 expected outcomes |
 | Input safety classification | 13/13 (100%) |
 | Output safety classification | 6/6 (100%) |
 | Citation/grounding validation | 5/5 (100%) |
@@ -800,3 +841,6 @@ distinguish the current evidence-backed system from future ambitions.
 - [`docs/retrieval-design.md`](docs/retrieval-design.md)
 - [`docs/generation-and-citations.md`](docs/generation-and-citations.md)
 - [`docs/streamlit-interface.md`](docs/streamlit-interface.md)
+- [`docs/advanced-rag.md`](docs/advanced-rag.md)
+- [`docs/advanced-rag-smoke.json`](docs/advanced-rag-smoke.json)
+- [`docs/baseline-rag-smoke.json`](docs/baseline-rag-smoke.json)
