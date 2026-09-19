@@ -39,6 +39,76 @@ patient-data interpretation, and emergency requests.
 | **Interface** | Streamlit web application plus command-line scripts |
 | **Quality checks** | 83 automated tests and small retrieval, confidence, grounding, and safety evaluations |
 
+## 🧠 Architecture
+
+The system has two workflows: prepare the trusted documents when the corpus
+changes, then retrieve and validate evidence for each question in Streamlit.
+
+### 1. Prepare the knowledge base
+
+```mermaid
+flowchart LR
+    SOURCES["Curated MOHFW / NCVBDC PDF URLs"] --> DOWNLOAD["Allowlist checks and PDF download"]
+    DOWNLOAD --> EXTRACT["Extract, clean and audit text"]
+    EXTRACT --> CHUNKS["Chunk text with source and page metadata"]
+    CHUNKS --> EMBED["Gemini document embeddings"]
+    CHUNKS --> INDEX[("SQLite index: text, metadata and vectors")]
+    EMBED --> INDEX
+```
+
+The manifest records document versions and provenance. The prepared index lets
+the application search the curated PDFs without downloading them for each question.
+
+### 2. Retrieve, generate and validate an answer
+
+```mermaid
+flowchart TD
+    UI["Streamlit: sample or typed question"] --> SAFE{"Input safe and in scope?"}
+    SAFE -- No --> REFUSE["Safety refusal: confidence Not assessed"]
+    SAFE -- Yes --> QUERY["Normalize the original query"]
+    QUERY --> BM25["BM25 keyword search"]
+    QUERY --> DENSE["Original-query semantic search"]
+    QUERY --> HYDE["HyDE: embed a hypothetical passage for search"]
+    INDEX[("Prepared SQLite guideline index")] --> BM25
+    INDEX --> DENSE
+    INDEX --> HYDE
+    DENSE -. Embedding unavailable .-> BM25
+    HYDE -. Helper unavailable: use original-query retrieval .-> FUSION
+    BM25 --> FUSION["Reciprocal-rank fusion"]
+    DENSE --> FUSION
+    HYDE --> FUSION
+    FUSION --> RANK["Local ONNX cross-encoder reranker"]
+    RANK --> WEAK{"No results or top score below 0.65?"}
+    WEAK -- Yes --> CRAG["CRAG: one safe rewrite or original-query expansion"]
+    CRAG --> SEARCH["Broader search inside the same curated index"]
+    SEARCH --> RERANK["Rerank against the original question and merge"]
+    WEAK -- No --> FILTER["Remove passages scoring below 0.20"]
+    RERANK --> FILTER
+    FILTER --> ENOUGH{"Acceptable evidence remains?"}
+    ENOUGH -- No --> LOW["Insufficient evidence: confidence Low"]
+    ENOUGH -- Yes --> GENERATE["Gemini: short structured claims with chunk IDs"]
+    GENERATE --> VALIDATE{"Schema, output safety, citations and support valid?"}
+    VALIDATE -- No --> RETRY{"Repair attempt still available?"}
+    RETRY -- Yes --> REPAIR["Refined repair prompt with retrieved evidence"]
+    REPAIR --> VALIDATE
+    RETRY -- No --> BLOCK["Blocked response: confidence Not assessed"]
+    VALIDATE -- Yes --> CONFIDENCE["Compute per-claim and overall evidence confidence"]
+    CONFIDENCE --> ANSWER["Streamlit answer: claims, official page citations and confidence"]
+```
+
+**How to read the diagram:** solid arrows show processing steps; dotted arrows
+show retrieval fallbacks. HyDE's generated passage helps find real chunks but
+never becomes answer evidence. CRAG makes at most one correction inside the
+approved corpus. The diagram shows the default enabled configuration; both
+features can be disabled in `configs/retrieval.json`.
+
+**Confidence:** each accepted claim uses its weakest cited-relevance/support
+score, and the answer uses its weakest claim. Labels are High (at least 0.80),
+Moderate (0.50 to below 0.80), or Low (below 0.50). These scores are evidence-strength
+heuristics, not calibrated probabilities of medical correctness. Operational
+failures and safety refusals show Not assessed; failed mandatory validation
+prevents the draft from being displayed.
+
 ### 🌟 What makes this project interesting?
 
 - 🔎 **Evidence before answers:** every allowed request searches the curated
@@ -164,38 +234,6 @@ page inclusion rules, and filenames are maintained in
 only from explicitly approved MOHFW/NCVBDC hostnames, validates that each response
 is a PDF, computes its SHA-256 digest, and saves provenance metadata. This is how
 external MOHFW links are retrieved without accepting arbitrary internet content.
-
-## 🧠 Architecture
-
-```mermaid
-flowchart TD
-    A[User question] --> B{Input safe and in scope?}
-    B -- No --> R1[Safe refusal]
-    B -- Yes --> C[Normalize query]
-    C --> HY[HyDE hypothetical passage embedding]
-    C --> D1[BM25 keyword search]
-    C --> D2[Gemini semantic search]
-    HY --> E
-    D2 -. API unavailable .-> D1
-    D1 --> E[Reciprocal-rank fusion]
-    D2 --> E
-    E --> F[Local cross-encoder reranker]
-    F --> CR{Top score below 0.65?}
-    CR -- Yes --> FIX[One corpus-only rewrite and broader search]
-    FIX --> RR[Rerank against original question]
-    CR -- No --> FILTER[Remove passages below 0.20]
-    RR --> FILTER
-    FILTER --> G{Acceptable evidence remains?}
-    G -- No --> R2[Insufficient-evidence refusal]
-    G -- Yes --> H[Gemini structured generation]
-    H --> I{Schema, safety, support and citations valid?}
-    I -- No --> R3[Bounded retry, then refusal]
-    I -- Yes --> J[Grounded answer with official pages and evidence confidence]
-```
-
-Solid arrows show the normal path. The dotted arrow shows the local BM25
-fallback when semantic query embedding is unavailable. Every refusal path is an
-intentional system outcome, not necessarily an application failure.
 
 ## 🧪 Advanced RAG and confidence
 
