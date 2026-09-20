@@ -149,6 +149,7 @@ end-to-end walkthrough, and then explore the code using the file guide.
 - [Try the app and understand the screenshots](#-working-application)
 - [See the visual architecture](#-architecture)
 - [Understand HyDE, CRAG, and confidence](#-advanced-rag-and-confidence)
+- [Explore configuration and tradeoffs](#-configuration-and-tradeoffs)
 - [Learn the core concepts](#-core-concepts-explained)
 - [Follow the complete workflow](#-end-to-end-walkthrough)
 - [Understand the technology choices](#-technology)
@@ -157,18 +158,45 @@ end-to-end walkthrough, and then explore the code using the file guide.
 - [Troubleshoot common issues](#-common-issues-and-resolutions)
 - [Review limitations and next steps](#-known-limitations)
 - [Prepare for interviews](#-common-interview-questions-and-sample-answers)
+- [Review the project in five minutes](#-five-minute-faculty-review)
 
 ## 📸 Working application
 
 The deployed interface includes ready-made questions, a free-text guideline
 question field, and an educational-use safety notice.
 
+### Screenshot 1: choose a guideline question
+
 ![Medical Guideline Assistant Streamlit interface](docs/assets/streamlit-working-app.png)
+
+*The dropdown helps visitors start with a question covered by the indexed corpus.
+The editable question field submits the request through the input safety gate.*
+
+### Screenshot 2: inspect the answer and its source
 
 Answers are grounded in retrieved guideline passages and include the official
 source, exact PDF page, and a direct link to the government document.
 
 ![Grounded Streamlit answer with an official citation](docs/assets/streamlit-grounded-answer.png)
+
+*The numbered claims and source-page link let a reviewer compare the generated
+summary with the original guideline.*
+
+> **Screenshot version:** these saved screenshots show the earlier interface,
+> before the HyDE/CRAG confidence-display update. They demonstrate question entry
+> and citations; they do not show all current controls or verify today's hosted
+> deployment. The current code also renders overall and per-claim confidence and
+> a “How this answer was checked” expander.
+
+### Understand the current response display
+
+| Display element | What to inspect |
+| --- | --- |
+| Evidence confidence | High, Moderate, Low, or Not assessed; an application-computed evidence signal |
+| Claim evidence confidence | The strength of support for each accepted claim; one weaker claim can lower the overall label |
+| Official source and PDF page | Open the original evidence and check that it supports the claim and preserves qualifiers |
+| How this answer was checked | Whether HyDE ran, whether correction was needed, and how many weak chunks were removed |
+| Request latency | Time spent handling this request; extra retrieval and repair calls may increase it |
 
 ### How to try it
 
@@ -258,6 +286,39 @@ evidence-strength bands, not probabilities of medical correctness.
 Both retrieval features are configurable and add API calls and latency. Read the
 [advanced RAG implementation guide](docs/advanced-rag.md) for the rules,
 limitations, cost tradeoffs, and comparison commands.
+
+## 🎛️ Configuration and tradeoffs
+
+Configuration is kept separate from application code so experiments can be
+repeated. These are the checked-in defaults, not guarantees about a running
+deployment's provider availability or quota.
+
+| Setting | Default | Why it matters |
+| --- | --- | --- |
+| `augmentation.hyde_enabled` | `true` | Adds hypothetical-passage retrieval; an extra model call and embedding can increase latency |
+| `augmentation.crag_enabled` | `true` | Allows one corrective search when initial evidence is weak |
+| `augmentation.correction_threshold` | `0.65` | Controls when correction runs; it is distinct from the acceptance threshold |
+| `reranking.minimum_top_score` | `0.20` | Minimum retrieval relevance; CRAG also removes passages below this score |
+| `generation.maximum_context_chunks` | `5` | Limits how much retrieved text reaches generation |
+| `generation.maximum_validation_attempts` | `2` | Allows one initial draft and one repair draft before blocking invalid output |
+
+Retrieval settings are in [`configs/retrieval.json`](configs/retrieval.json).
+The `generation.*` rows refer to keys in
+[`configs/generation.json`](configs/generation.json), without a nested
+`generation` object. Confidence bands are defined in
+[`confidence.py`](src/medical_guideline_assistant/confidence.py).
+
+**An experiment to try:** run the baseline and advanced evaluations on the same
+questions, then compare expected outcomes, citations, correction activity, and
+latency. Change one setting at a time and record it alongside the result. Do not
+lower validation thresholds merely to make more questions produce answers.
+
+**Cost and failure behavior:** ordinary semantic retrieval, HyDE, correction,
+generation, and repair can each add work. HyDE failure preserves ordinary
+retrieval, and query-embedding failure can fall back to local keyword search.
+Mandatory reranking or answer-validation failure still prevents an unvalidated
+answer from being shown. A session-level rate limit does not provide shared
+quota protection across all public users.
 
 ## 🧩 Core concepts explained
 
@@ -560,6 +621,25 @@ Recorded small smoke benchmarks (these are project checks, not clinical validati
 | Hybrid + reranker MRR@5 | 0.917 |
 | Hybrid gold-page coverage@5 | 0.806 |
 
+### What the recorded advanced comparison actually shows
+
+The saved live reports are from **19 September 2026**. The baseline produced
+four expected outcomes out of five; the advanced run produced five out of five.
+The baseline dengue response was blocked by validation. These are single runs
+with model-generated outputs, so the difference does not establish that HyDE or
+CRAG always improves accuracy.
+
+In the advanced run, the three answerable cases took approximately **29–45
+seconds**, while the unsupported case took about **44 seconds** and exercised
+the correction path. These are individual recorded timings, not latency
+percentiles or a service-level promise. The five cases check outcomes and
+pipeline behavior; they do not measure clinical correctness.
+
+Inspect the raw evidence:
+[baseline report](docs/baseline-rag-smoke.json) ·
+[advanced report](docs/advanced-rag-smoke.json) ·
+[implementation and evaluation guide](docs/advanced-rag.md).
+
 ### What do these numbers mean?
 
 - **Automated tests** check specific expected behaviors, including validation,
@@ -843,6 +923,32 @@ and neither lexical overlap nor cross-encoder relevance proves semantic entailme
 (that the evidence actually implies the claim). The system
 therefore refuses aggressively and must not be used for diagnosis or clinical
 decision-making.
+
+## 🎓 Five-minute faculty review
+
+1. **Understand the scope:** read the project overview and architecture. The
+   corpus contains three selected government guidelines; personalized medical
+   advice is outside the project boundary.
+2. **Try an answerable question:** use a sample question in the live app. Inspect
+   the response, confidence labels, and official source page. Output wording can
+   differ between runs.
+3. **Check a refusal:** ask “What medicine should I take?” without entering real
+   health information. The input guardrail should refuse the personalized request.
+4. **Inspect implementation:** follow
+   [`pipeline.py`](src/medical_guideline_assistant/pipeline.py) for retrieval,
+   [`answering.py`](src/medical_guideline_assistant/answering.py) for generation
+   orchestration, and
+   [`grounding.py`](src/medical_guideline_assistant/generation/grounding.py) for
+   citation and claim checks.
+5. **Review evidence and limitations:** compare the saved evaluation reports,
+   reproduce tests using the commands above, and distinguish implemented
+   features from the future roadmap below.
+
+**Portfolio description:** built an educational medical-guideline RAG assistant
+with hybrid retrieval, local cross-encoder reranking, HyDE, corpus-only corrective
+retrieval, structured Gemini generation, citation checks, and evidence-confidence
+labels, served through Streamlit. Report benchmark results with their sample
+sizes; avoid describing these small evaluations as medical validation.
 
 ## ⚠️ Known limitations
 
