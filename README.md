@@ -167,7 +167,7 @@ question field, and an educational-use safety notice.
 
 ### Screenshot 1: choose a guideline question
 
-![Medical Guideline Assistant Streamlit interface](docs/assets/streamlit-working-app.png)
+![Current Streamlit interface with the dengue sample question selected](docs/assets/streamlit-working-app-2026-09-21.png)
 
 *The dropdown helps visitors start with a question covered by the indexed corpus.
 The editable question field submits the request through the input safety gate.*
@@ -177,16 +177,26 @@ The editable question field submits the request through the input safety gate.*
 Answers are grounded in retrieved guideline passages and include the official
 source, exact PDF page, and a direct link to the government document.
 
-![Grounded Streamlit answer with an official citation](docs/assets/streamlit-grounded-answer.png)
+![Current answer showing overall and claim-level confidence with official PDF citations](docs/assets/streamlit-grounded-answer-2026-09-21.png)
 
 *The numbered claims and source-page link let a reviewer compare the generated
-summary with the original guideline.*
+summary with the original guideline. This run displayed Low overall confidence
+and mixed High/Low claim confidence. The overall label follows the weakest claim;
+it is an evidence-strength heuristic, not a probability of medical correctness.*
 
-> **Screenshot version:** these saved screenshots show the earlier interface,
-> before the HyDE/CRAG confidence-display update. They demonstrate question entry
-> and citations; they do not show all current controls or verify today's hosted
-> deployment. The current code also renders overall and per-claim confidence and
-> a “How this answer was checked” expander.
+### Screenshot 3: inspect the retrieval checks
+
+![Expanded retrieval checks showing HyDE applied, correction not needed and two weak passages removed](docs/assets/streamlit-retrieval-checks-2026-09-21.png)
+
+*The expanded “How this answer was checked” panel shows HyDE applied, corrective
+retrieval not needed, and two weak passages removed. This request took 24.74
+seconds. The panel reports the retrieval path; it does not certify answer accuracy.*
+
+> **Captured on 21 September 2026 from the public Streamlit app.** These are real
+> screenshots of the current interface and one sample request, including its
+> actual confidence labels. Answer wording, scores, citations, retrieval paths,
+> and latency can vary between runs. The answer screenshot shows an excerpt;
+> the final screenshot shows the lower part of the same response.
 
 ### Understand the current response display
 
@@ -205,13 +215,16 @@ summary with the original guideline.*
 3. Click **Search official guidelines** and wait for the result.
 4. Read the answer and its source title and PDF page references. Follow the
    **Open official source** link to inspect the original document.
-5. Notice the request latency below the result: it measures how long that request
+5. Read overall and claim-level confidence, then expand **How this answer was
+   checked** to inspect HyDE and corrective retrieval activity.
+6. Notice the request latency below the result: it measures how long that request
    took, not the quality or certainty of the answer.
 
 In the first screenshot, the dropdown provides a starting point for users who do
 not know what the corpus covers. In the second, the answer and citation show how
 an explanation can be traced back to a document. The screenshots illustrate the
-interface; exact wording and retrieved pages can differ between requests.
+interface; exact wording and retrieved pages can differ between requests. The
+third screenshot adds the retrieval diagnostics for the same request.
 
 An insufficient-evidence message means the system could not find or validate
 enough support. A safety refusal means the question asks for something outside
