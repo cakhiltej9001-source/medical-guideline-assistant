@@ -44,6 +44,29 @@ patient-data interpretation, and emergency requests.
 The system has two workflows: prepare the trusted documents when the corpus
 changes, then retrieve and validate evidence for each question in Streamlit.
 
+### Components and where they run
+
+```mermaid
+flowchart LR
+    USER["Browser user"] --> APP["Streamlit interface"]
+    subgraph HOST["Streamlit server / local development machine"]
+        APP --> ORCH["Python orchestration and safety checks"]
+        ORCH --> DB[("SQLite: chunks, metadata and vectors")]
+        ORCH --> ONNX["Local ONNX reranker and claim-support scorer"]
+        ORCH --> CHECKS["Output validation and confidence calculation"]
+    end
+    ORCH --> API["Google Gemini API: embeddings, HyDE, rewrite and generation"]
+    API --> ORCH
+    CHECKS --> APP
+    APP -. Official citation links .-> PDF["MOHFW / NCVBDC PDFs"]
+```
+
+The browser displays results; the server performs retrieval and validation.
+Gemini receives the allowed query and the inputs needed for the requested model
+operation, including selected passages for answer generation. SQLite and the
+ONNX reranker run with the application. Citation links open the original public
+PDFs. This is a single Python application, with no separate API service required.
+
 ### 1. Prepare the knowledge base
 
 ```mermaid
@@ -68,16 +91,18 @@ flowchart TD
     SAFE -- Yes --> QUERY["Normalize the original query"]
     QUERY --> BM25["BM25 keyword search"]
     QUERY --> DENSE["Original-query semantic search"]
-    QUERY --> HYDE["HyDE: embed a hypothetical passage for search"]
+    QUERY --> HYDE["HyDE: generate and embed a hypothetical passage"]
+    HYDE --> HSEARCH["Search real chunks using the hypothetical vector"]
     INDEX[("Prepared SQLite guideline index")] --> BM25
     INDEX --> DENSE
-    INDEX --> HYDE
+    INDEX --> HSEARCH
     DENSE -. Embedding unavailable .-> BM25
     HYDE -. Helper unavailable: use original-query retrieval .-> FUSION
     BM25 --> FUSION["Reciprocal-rank fusion"]
     DENSE --> FUSION
-    HYDE --> FUSION
+    HSEARCH --> FUSION
     FUSION --> RANK["Local ONNX cross-encoder reranker"]
+    RANK -. Reranking fails .-> LOW
     RANK --> WEAK{"No results or top score below 0.65?"}
     WEAK -- Yes --> CRAG["CRAG: one safe rewrite or original-query expansion"]
     CRAG --> SEARCH["Broader search inside the same curated index"]
@@ -86,18 +111,22 @@ flowchart TD
     RERANK --> FILTER
     FILTER --> ENOUGH{"Acceptable evidence remains?"}
     ENOUGH -- No --> LOW["Insufficient evidence: confidence Low"]
-    ENOUGH -- Yes --> GENERATE["Gemini: short structured claims with chunk IDs"]
+    ENOUGH -- Yes --> CONTEXT["Select up to 5 real evidence chunks"]
+    CONTEXT --> GENERATE["Gemini: structured claims or insufficient evidence"]
+    GENERATE -. Generation fails .-> BLOCK
     GENERATE --> VALIDATE{"Schema, output safety, citations and support valid?"}
     VALIDATE -- No --> RETRY{"Repair attempt still available?"}
     RETRY -- Yes --> REPAIR["Refined repair prompt with retrieved evidence"]
     REPAIR --> VALIDATE
     RETRY -- No --> BLOCK["Blocked response: confidence Not assessed"]
-    VALIDATE -- Yes --> CONFIDENCE["Compute per-claim and overall evidence confidence"]
+    VALIDATE -- Yes --> STATUS{"Validated payload contains an answer?"}
+    STATUS -- No --> LOW
+    STATUS -- Yes --> CONFIDENCE["Compute per-claim and overall evidence confidence"]
     CONFIDENCE --> ANSWER["Streamlit answer: claims, official page citations and confidence"]
 ```
 
 **How to read the diagram:** solid arrows show processing steps; dotted arrows
-show retrieval fallbacks. HyDE's generated passage helps find real chunks but
+show fallbacks or failure paths. HyDE's generated passage helps find real chunks but
 never becomes answer evidence. CRAG makes at most one correction inside the
 approved corpus. The diagram shows the default enabled configuration; both
 features can be disabled in `configs/retrieval.json`.
@@ -108,6 +137,33 @@ Moderate (0.50 to below 0.80), or Low (below 0.50). These scores are evidence-st
 heuristics, not calibrated probabilities of medical correctness. Operational
 failures and safety refusals show Not assessed; failed mandatory validation
 prevents the draft from being displayed.
+
+### What each decision means
+
+| Decision | Current behavior |
+| --- | --- |
+| Unsafe or personalized input | Refuse before retrieval or model calls |
+| HyDE unavailable | Continue with original-query retrieval |
+| Query embedding unavailable | Use the local keyword index; still require validation |
+| Missing results or top relevance below 0.65 | Run one corpus-only corrective search; retain the original question for reranking |
+| Evidence relevance below 0.20 | Remove weak passages with CRAG enabled; refuse if acceptable evidence is absent |
+| Reranking fails | Return insufficient evidence rather than generate from unchecked retrieval |
+| Draft fails validation | Use one repair draft by default, then block if it also fails |
+| Validated payload says insufficient evidence | Display the insufficient-evidence response without an answer |
+| Accepted answer | Display claims, official citations, overall and claim confidence, latency, and retrieval diagnostics |
+
+**Two different thresholds:** 0.65 triggers corrective retrieval; 0.20 is the
+retrieval acceptance floor. Neither is the High-confidence threshold of 0.80.
+An accepted answer can therefore show Low evidence confidence, as in the current
+application screenshots. These labels summarize relevance/support scores rather
+than establish factual or medical correctness.
+
+**Code map:** [`pipeline.py`](src/medical_guideline_assistant/pipeline.py) owns
+retrieval and correction; [`answering.py`](src/medical_guideline_assistant/answering.py)
+selects evidence and controls generation/repair;
+[`grounding.py`](src/medical_guideline_assistant/generation/grounding.py) validates
+claims and citations; [`confidence.py`](src/medical_guideline_assistant/confidence.py)
+assigns evidence bands; [`streamlit_app.py`](streamlit_app.py) renders the result.
 
 ### 🌟 What makes this project interesting?
 
